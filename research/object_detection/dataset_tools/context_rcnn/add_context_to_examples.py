@@ -195,13 +195,14 @@ class ReKeyDataFn(beam.DoFn):
       input_example = self._resize_image(input_example)
       self._num_images_resized.inc(1)
 
-    new_key = input_example.features.feature[
-        self._sequence_key].bytes_list.value[0]
-
+    # new_key = input_example.features.feature[
+    #     self._sequence_key].bytes_list.value[0]
+    new_key = 'no_sequence_key'.encode('utf8')
     if self._time_horizon:
-      date_captured = datetime.datetime.strptime(
-          six.ensure_str(input_example.features.feature[
-              'image/date_captured'].bytes_list.value[0]), '%Y-%m-%d %H:%M:%S')
+      # date_captured = datetime.datetime.strptime(
+      #     six.ensure_str(input_example.features.feature[
+      #         'image/date_captured'].bytes_list.value[0]), '%Y-%m-%d %H:%M:%S')
+      date_captured = datetime.datetime.strptime("1985-02-17 23:15:34", '%Y-%m-%d %H:%M:%S')
       year = date_captured.year
       month = date_captured.month
       day = date_captured.day
@@ -570,6 +571,10 @@ class GenerateContextFn(beam.DoFn):
         seq_example.context.feature[
             'image/context_features'].float_list.value.extend(
                 context_features)
+        seq_example.context.feature[
+            'image/valid_context_size'].int64_list.value.append(
+            len(context_features))
+
         if self._keep_context_features_image_id_list:
           seq_example.context.feature[
               'image/context_features_image_id_list'].bytes_list.value.extend(
@@ -676,6 +681,9 @@ class GenerateContextFn(beam.DoFn):
           example.features.feature[
               'image/context_feature_length'].int64_list.value.append(
                   feature_length)
+          example.features.feature[
+                'image/valid_context_size'].int64_list.value.append(
+                len(context_features))
 
         if self._keep_context_features_image_id_list:
           example.features.feature[

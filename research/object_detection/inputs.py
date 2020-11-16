@@ -1068,6 +1068,10 @@ def create_predict_input_fn(model_config, predict_input_config):
     `input_fn` for `Estimator` in PREDICT mode.
   """
 
+  max_num_context_features=config_util.get_max_num_context_features(
+      model_config),
+  context_feature_length=config_util.get_context_feature_length(
+      model_config)
   def _predict_input_fn(params=None):
     """Decodes serialized tf.Examples and returns `ServingInputReceiver`.
 
@@ -1095,17 +1099,27 @@ def create_predict_input_fn(model_config, predict_input_config):
 
     decoder = tf_example_decoder.TfExampleDecoder(
         load_instance_masks=False,
-        num_additional_channels=predict_input_config.num_additional_channels)
+        num_additional_channels=predict_input_config.num_additional_channels,
+        load_context_features=predict_input_config.load_context_features)
     input_dict = transform_fn(decoder.decode(example))
     images = tf.cast(input_dict[fields.InputDataFields.image], dtype=tf.float32)
     images = tf.expand_dims(images, axis=0)
     true_image_shape = tf.expand_dims(
         input_dict[fields.InputDataFields.true_image_shape], axis=0)
 
-    return tf.estimator.export.ServingInputReceiver(
-        features={
-            fields.InputDataFields.image: images,
-            fields.InputDataFields.true_image_shape: true_image_shape},
+    features={
+        fields.InputDataFields.image: images,
+        fields.InputDataFields.true_image_shape: true_image_shape,
+    }
+    if fields.InputDataFields.context_features in input_dict:
+      # shape_utils.pad_or_clip_nd(input_dict[fields.InputDataFields.context_features], [max_num_context_features, context_feature_length])
+      input_dict[fields.InputDataFields.context_features].set_shape([max_num_context_features[0], context_feature_length])
+      features[fields.InputDataFields.context_features] = tf.expand_dims(input_dict[
+          fields.InputDataFields.context_features], axis=0)
+      tensor_shape = tf.shape(
+          features[fields.InputDataFields.context_features])
+      features[fields.InputDataFields.valid_context_size] = tf.constant([1], dtype=tf.int32)#tf.expand_dims(tensor_shape[0], axis=0)
+    return tf.estimator.export.ServingInputReceiver(features,
         receiver_tensors={SERVING_FED_EXAMPLE_KEY: example})
 
   return _predict_input_fn

@@ -188,6 +188,20 @@ class GenerateEmbeddingDataFn(beam.DoFn):
     except Exception:  # pylint: disable=broad-except
       temporal_embedding = None
 
+    image = input_example.features.feature['image/encoded']
+    image = image.bytes_list.value[0]
+    # t = tf.io.FixedLenFeature(image, tf.uint8, default_value='')
+
+    # image_feature_description = {
+    #     'image/encoded': tf.io.FixedLenFeature([], tf.string),
+    # }
+    #
+    # def _parse_image_function(example_proto):
+    #     # Parse the input tf.train.Example proto using the dictionary above.
+    #     return tf.io.parse_single_example(example_proto, image_feature_description)
+    t = tf.image.decode_jpeg(image)
+    # t = tf.cast(image, dtype=tf.uint8)
+    # t = tf.convert_to_tensor(image, dtype=tf.uint8)
     detections = self._detect_fn.signatures['serving_default'](
         (tf.expand_dims(tf.convert_to_tensor(tfexample), 0)))
     if self._embedding_type == 'final_box_features':
@@ -196,6 +210,10 @@ class GenerateEmbeddingDataFn(beam.DoFn):
       detection_features = detections['cropped_rpn_box_features']
     else:
       raise ValueError('embedding type not supported')
+# =======
+#         (tf.expand_dims(t, 0)))
+#     detection_features = detections['detection_features']
+# >>>>>>> fix bug for Context RCNN training
     detection_boxes = detections['detection_boxes']
     num_detections = detections['num_detections']
     detection_scores = detections['detection_scores']
