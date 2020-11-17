@@ -564,7 +564,7 @@ class FasterRCNNMetaArch(model.DetectionModel):
     self._first_stage_localization_loss = (
         losses.WeightedSmoothL1LocalizationLoss())
     self._first_stage_objectness_loss = (
-        losses.WeightedSoftmaxClassificationLoss())
+        losses.SigmoidFocalClassificationLoss())
     self._first_stage_loc_loss_weight = first_stage_localization_loss_weight
     self._first_stage_obj_loss_weight = first_stage_objectness_loss_weight
 
