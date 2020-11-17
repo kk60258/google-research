@@ -432,6 +432,8 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
     scaffold_fn = None
 
     if mode == tf.estimator.ModeKeys.TRAIN:
+      preprocessed_images_with_box = tf.image.draw_bounding_boxes(images=features[fields.InputDataFields.image], boxes=labels[fields.InputDataFields.groundtruth_boxes])
+      tf.summary.image("Training_data", preprocessed_images_with_box, max_outputs= 24)
       labels = unstack_batch(
           labels,
           unpad_groundtruth_tensors=train_config.unpad_groundtruth_tensors)
