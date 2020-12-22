@@ -22,12 +22,13 @@ from six.moves import range
 import tensorflow as tf
 from object_detection.utils import ops
 from object_detection.utils import shape_utils
-
+import functools
+import tf_slim as slim
 
 def create_conv_block(name, num_filters, kernel_size, strides, padding,
                       use_separable, apply_batchnorm, apply_activation,
                       conv_hyperparams, is_training, freeze_batchnorm,
-                      conv_bn_act_pattern=True):
+                      conv_bn_act_pattern=True, use_keras=True):
   """Create Keras layers for regular or separable convolutions.
 
   Args:
@@ -70,45 +71,110 @@ def create_conv_block(name, num_filters, kernel_size, strides, padding,
     # here, since this is not the case in feature_map_generators.py
     kwargs['pointwise_regularizer'] = kwargs['kernel_regularizer']
     kwargs['pointwise_initializer'] = kwargs['kernel_initializer']
-    layers.append(
-        tf.keras.layers.SeparableConv2D(
-            filters=num_filters,
-            kernel_size=kernel_size,
-            depth_multiplier=1,
-            padding=padding,
-            strides=strides,
-            name=name + 'separable_conv',
-            **kwargs))
+    if use_keras:
+        layers.append(
+            tf.keras.layers.SeparableConv2D(
+                filters=num_filters,
+                kernel_size=kernel_size,
+                depth_multiplier=1,
+                padding=padding,
+                strides=strides,
+                name=name + 'separable_conv',
+                **kwargs))
+    else:
+        conv_params = {}
+        conv_params['weights_initializer'] = kwargs['kernel_initializer']
+        conv_params['weights_regularizer'] = kwargs['kernel_regularizer']
+        conv_params['activation_fn'] = kwargs['activation']
+        if not kwargs['use_bias']:
+            conv_params['biases_initializer'] = None
+        conv_params['pointwise_initializer'] = kwargs['kernel_initializer']
+        layers.append(
+            functools.partial(
+                slim.separable_conv2d,
+                num_outputs=num_filters,
+                kernel_size=kernel_size,
+                depth_multiplier=1,
+                padding=padding,
+                stride=strides,
+                scope=name + 'separable_conv',
+                **conv_params
+            )
+        )
   else:
-    layers.append(
-        tf.keras.layers.Conv2D(
-            filters=num_filters,
-            kernel_size=kernel_size,
-            padding=padding,
-            strides=strides,
-            name=name + 'conv',
-            **conv_hyperparams.params()))
+    if use_keras:
+        layers.append(
+            tf.keras.layers.Conv2D(
+                filters=num_filters,
+                kernel_size=kernel_size,
+                padding=padding,
+                strides=strides,
+                name=name + 'conv',
+                **conv_hyperparams.params()))
+    else:
+        kwargs = conv_hyperparams.params()
+        conv_params = {}
+        conv_params['weights_initializer'] = kwargs['kernel_initializer']
+        conv_params['weights_regularizer'] = kwargs['kernel_regularizer']
+        conv_params['activation_fn'] = kwargs['activation']
+        if not kwargs['use_bias']:
+            conv_params['biases_initializer'] = None
+        layers.append(
+            functools.partial(slim.conv2d,
+              num_outputs=num_filters,
+              kernel_size=kernel_size,
+              padding=padding,
+              stride=strides,
+              scope=name + 'conv',
+              **conv_params
+            )
+        )
 
   if apply_batchnorm:
-    layers.append(
-        conv_hyperparams.build_batch_norm(
-            training=(is_training and not freeze_batchnorm),
-            name=name + 'batchnorm'))
+    kwargs = conv_hyperparams._batch_norm_params
+    if use_keras:
+        layers.append(
+            conv_hyperparams.build_batch_norm(
+                training=(is_training and not freeze_batchnorm),
+                name=name + 'batchnorm'))
+    else:
+        kwargs = conv_hyperparams._batch_norm_params
+        batch_norm_params = {}
+        batch_norm_params['decay'] = kwargs['momentum']
+        batch_norm_params['center'] = kwargs['center']
+        batch_norm_params['scale'] = kwargs['scale']
+        batch_norm_params['epsilon'] = kwargs['epsilon']
+
+        layers.append(
+            functools.partial(slim.batch_norm,
+                is_training=(is_training and not freeze_batchnorm),
+                scope=name + 'batchnorm',
+                **batch_norm_params
+            )
+        )
 
   if apply_activation:
-    activation_layer = conv_hyperparams.build_activation_layer(
-        name=name + 'activation')
-    if conv_bn_act_pattern:
-      layers.append(activation_layer)
+    if use_keras:
+        activation_layer = conv_hyperparams.build_activation_layer(
+            name=name + 'activation')
     else:
-      layers = [activation_layer] + layers
+        kwargs = conv_hyperparams.params()
+        activation_layer = kwargs['activation']
+        if activation_layer is not None:
+            activation_layer = functools.partial(activation_layer, name=name + 'activation')
+
+    if activation_layer is not None:
+        if conv_bn_act_pattern:
+          layers.append(activation_layer)
+        else:
+          layers = [activation_layer] + layers
 
   return layers
 
 
 def create_downsample_feature_map_ops(scale, downsample_method,
                                       conv_hyperparams, is_training,
-                                      freeze_batchnorm, name):
+                                      freeze_batchnorm, name, use_keras=True):
   """Creates Keras layers for downsampling feature maps.
 
   Args:
@@ -136,40 +202,91 @@ def create_downsample_feature_map_ops(scale, downsample_method,
   stride = int(scale)
   kernel_size = stride + 1
   if downsample_method == 'max_pooling':
-    layers.append(
-        tf.keras.layers.MaxPooling2D(
-            pool_size=kernel_size,
-            strides=stride,
-            padding=padding,
-            name=name + 'downsample_max_x{}'.format(stride)))
+    if use_keras:
+        layers.append(
+            tf.keras.layers.MaxPooling2D(
+                pool_size=kernel_size,
+                strides=stride,
+                padding=padding,
+                name=name + 'downsample_max_x{}'.format(stride)))
+    else:
+        layers.append(
+            functools.partial(
+                slim.max_pool2d,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                scope=name + 'downsample_max_x{}'.format(stride))
+        )
   elif downsample_method == 'avg_pooling':
-    layers.append(
-        tf.keras.layers.AveragePooling2D(
-            pool_size=kernel_size,
-            strides=stride,
-            padding=padding,
-            name=name + 'downsample_avg_x{}'.format(stride)))
+    if use_keras:
+        layers.append(
+            tf.keras.layers.AveragePooling2D(
+                pool_size=kernel_size,
+                strides=stride,
+                padding=padding,
+                name=name + 'downsample_avg_x{}'.format(stride)))
+    else:
+        layers.append(
+            functools.partial(
+                slim.avg_pool2d,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                scope=name + 'downsample_avg_x{}'.format(stride)
+            )
+        )
   elif downsample_method == 'depthwise_conv':
-    layers.append(
-        tf.keras.layers.DepthwiseConv2D(
-            kernel_size=kernel_size,
-            strides=stride,
-            padding=padding,
-            name=name + 'downsample_depthwise_x{}'.format(stride)))
-    layers.append(
-        conv_hyperparams.build_batch_norm(
-            training=(is_training and not freeze_batchnorm),
-            name=name + 'downsample_batchnorm'))
-    layers.append(
-        conv_hyperparams.build_activation_layer(name=name +
-                                                'downsample_activation'))
+    if use_keras:
+        layers.append(
+            tf.keras.layers.DepthwiseConv2D(
+                kernel_size=kernel_size,
+                strides=stride,
+                padding=padding,
+                name=name + 'downsample_depthwise_x{}'.format(stride)))
+        layers.append(
+            conv_hyperparams.build_batch_norm(
+                training=(is_training and not freeze_batchnorm),
+                name=name + 'downsample_batchnorm'))
+        layers.append(
+            conv_hyperparams.build_activation_layer(name=name +
+                                                    'downsample_activation'))
+    else:
+        layers.append(
+            functools.partial(
+                slim.separable_conv2d,
+                num_outputs=None,
+                kernel_size=kernel_size,
+                padding=padding,
+                stride=stride,
+                scope=name + 'downsample_depthwise_x{}'.format(stride)
+            )
+        )
+        kwargs = conv_hyperparams._batch_norm_params
+        batch_norm_params = {}
+        batch_norm_params['decay'] = kwargs['momentum']
+        batch_norm_params['center'] = kwargs['center']
+        batch_norm_params['scale'] = kwargs['scale']
+        batch_norm_params['epsilon'] = kwargs['epsilon']
+        layers.append(
+            functools.partial(
+                slim.batch_norm,
+                is_training=(is_training and not freeze_batchnorm),
+                scope=name + 'downsample_batchnorm',
+                **batch_norm_params
+            )
+        )
+        kwargs = conv_hyperparams.params()
+        activation_layer = kwargs['activation']
+        activation_layer = functools.partial(activation_layer, name=name + 'downsample_activation')
+        layers.append(activation_layer)
   else:
     raise ValueError('Unknown downsample method: {}'.format(downsample_method))
 
   return layers
 
 
-def create_upsample_feature_map_ops(scale, use_native_resize_op, name):
+def create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras=True):
   """Creates Keras layers for upsampling feature maps.
 
   Args:
@@ -191,20 +308,33 @@ def create_upsample_feature_map_ops(scale, use_native_resize_op, name):
       image_shape = shape_utils.combined_static_and_dynamic_shape(image)
       return tf.image.resize_nearest_neighbor(
           image, [image_shape[1] * scale, image_shape[2] * scale])
-
-    layers.append(
-        tf.keras.layers.Lambda(
-            resize_nearest_neighbor,
-            name=name + 'nearest_neighbor_upsampling_x{}'.format(scale)))
+    if use_keras:
+        layers.append(
+            tf.keras.layers.Lambda(
+                resize_nearest_neighbor,
+                name=name + 'nearest_neighbor_upsampling_x{}'.format(scale)))
+    else:
+        layers.append(functools.partial(
+                    resize_nearest_neighbor,
+                    name=name + 'nearest_neighbor_upsampling_x{}'.format(scale)
+                )
+        )
   else:
 
     def nearest_neighbor_upsampling(image):
       return ops.nearest_neighbor_upsampling(image, scale=scale)
-
-    layers.append(
-        tf.keras.layers.Lambda(
-            nearest_neighbor_upsampling,
-            name=name + 'nearest_neighbor_upsampling_x{}'.format(scale)))
+    if use_keras:
+        layers.append(
+            tf.keras.layers.Lambda(
+                nearest_neighbor_upsampling,
+                name=name + 'nearest_neighbor_upsampling_x{}'.format(scale)))
+    else:
+        # layers.append(functools.partial(
+        #     nearest_neighbor_upsampling,
+        #     name=name + 'nearest_neighbor_upsampling_x{}'.format(scale)
+        # )
+        # )
+        layers.append(nearest_neighbor_upsampling)
 
   return layers
 
@@ -212,7 +342,7 @@ def create_upsample_feature_map_ops(scale, use_native_resize_op, name):
 def create_resample_feature_map_ops(input_scale_factor, output_scale_factor,
                                     downsample_method, use_native_resize_op,
                                     conv_hyperparams, is_training,
-                                    freeze_batchnorm, name):
+                                    freeze_batchnorm, name, use_keras=True):
   """Creates Keras layers for downsampling or upsampling feature maps.
 
   Args:
@@ -249,14 +379,14 @@ def create_resample_feature_map_ops(input_scale_factor, output_scale_factor,
     scale = output_scale_factor // input_scale_factor
     return create_downsample_feature_map_ops(scale, downsample_method,
                                              conv_hyperparams, is_training,
-                                             freeze_batchnorm, name)
+                                             freeze_batchnorm, name, use_keras)
   elif input_scale_factor > output_scale_factor:
     if input_scale_factor % output_scale_factor != 0:
       raise ValueError('Invalid scale factor: input scale 1/{} not a divisor of'
                        'output scale 1/{}'.format(input_scale_factor,
                                                   output_scale_factor))
     scale = input_scale_factor // output_scale_factor
-    return create_upsample_feature_map_ops(scale, use_native_resize_op, name)
+    return create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras)
   else:
     return []
 
@@ -356,3 +486,11 @@ class BiFPNCombineLayer(tf.keras.layers.Layer):
             'Inputs could not be combined. Shapes should match, '
             'but input_shape[0] is {} while input_shape[{}] is {}'.format(
                 output_shape, i, input_shape[i]))
+
+class BiFPNCombineLayerWrapper(BiFPNCombineLayer):
+    def __init__(self, **kwargs):
+        super(BiFPNCombineLayerWrapper, self).__init__(**kwargs)
+
+    def __call__(self, *args, **kwargs):
+        super(BiFPNCombineLayerWrapper, self).build(args[0])
+        return self.call(args[0])
