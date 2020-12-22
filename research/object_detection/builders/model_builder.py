@@ -89,6 +89,7 @@ if tf_version.is_tf1():
   from object_detection.models.ssd_mobiledet_feature_extractor import SSDMobileDetDSPFeatureExtractor
   from object_detection.models.ssd_mobiledet_feature_extractor import SSDMobileDetEdgeTPUFeatureExtractor
   from object_detection.models.ssd_mobiledet_feature_extractor import SSDMobileDetGPUFeatureExtractor
+  from object_detection.models.ssd_mobiledet_feature_extractor import SSDMobileDetDSPFeatureExtractorBifpn
   from object_detection.models.ssd_pnasnet_feature_extractor import SSDPNASNetFeatureExtractor
   from object_detection.predictors import rfcn_box_predictor
 # pylint: enable=g-import-not-at-top
@@ -215,6 +216,8 @@ if tf_version.is_tf1():
           SSDMobileDetEdgeTPUFeatureExtractor,
       'ssd_mobiledet_gpu':
           SSDMobileDetGPUFeatureExtractor,
+      'ssd_mobiledet_dsp_bifpn':
+          SSDMobileDetDSPFeatureExtractorBifpn,
   }
 
   FASTER_RCNN_FEATURE_EXTRACTOR_CLASS_MAP = {
@@ -352,6 +355,12 @@ def _build_ssd_feature_extractor(feature_extractor_config,
         'bifpn_combine_method': feature_extractor_config.bifpn.combine_method,
     })
 
+  if feature_type == 'ssd_mobiledet_dsp_bifpn':
+      keras_conv_hyperparams = hyperparams_builder.KerasLayerHyperparams(
+          feature_extractor_config.conv_hyperparams)
+      kwargs.update({
+          'keras_conv_hyperparams': keras_conv_hyperparams,
+      })
   return feature_extractor_class(**kwargs)
 
 

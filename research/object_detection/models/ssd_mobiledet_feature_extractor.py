@@ -23,7 +23,7 @@ from object_detection.meta_architectures import ssd_meta_arch
 from object_detection.models import feature_map_generators
 from object_detection.utils import ops
 from object_detection.utils import shape_utils
-
+from object_detection.models import bidirectional_feature_pyramid_generators as bifpn_generators
 
 BACKBONE_WEIGHT_DECAY = 4e-5
 
@@ -528,6 +528,77 @@ class SSDMobileDetDSPFeatureExtractor(SSDMobileDetFeatureExtractorBase):
         use_depthwise=use_depthwise,
         override_base_feature_extractor_hyperparams=override_base_feature_extractor_hyperparams,
         scope_name=scope_name)
+
+class SSDMobileDetDSPFeatureExtractorBifpn(SSDMobileDetFeatureExtractorBase):
+    """MobileDet-DSP feature extractor."""
+
+    def __init__(self,
+                 is_training,
+                 depth_multiplier,
+                 min_depth,
+                 pad_to_multiple,
+                 conv_hyperparams_fn,
+                 bifpn_min_level,
+                 bifpn_max_level,
+                 bifpn_num_iterations,
+                 bifpn_num_filters,
+                 bifpn_combine_method,
+                 keras_conv_hyperparams=None,
+                 reuse_weights=None,
+                 use_explicit_padding=False,
+                 use_depthwise=False,
+                 override_base_feature_extractor_hyperparams=False,
+                 scope_name='MobileDetDSP'):
+        super(SSDMobileDetDSPFeatureExtractorBifpn, self).__init__(
+            backbone_fn=mobiledet_dsp_backbone,
+            is_training=is_training,
+            depth_multiplier=depth_multiplier,
+            min_depth=min_depth,
+            pad_to_multiple=pad_to_multiple,
+            conv_hyperparams_fn=conv_hyperparams_fn,
+            reuse_weights=reuse_weights,
+            use_explicit_padding=use_explicit_padding,
+            use_depthwise=use_depthwise,
+            override_base_feature_extractor_hyperparams=override_base_feature_extractor_hyperparams,
+            scope_name=scope_name)
+
+        self._keras_conv_hyperparams = keras_conv_hyperparams
+        self._bifpn_min_level = bifpn_min_level
+        self._bifpn_max_level = bifpn_max_level
+        self._bifpn_num_iterations = bifpn_num_iterations
+        self._bifpn_num_filters = max(bifpn_num_filters, min_depth)
+        self._bifpn_node_params = {'combine_method': bifpn_combine_method}
+        self._backbone_max_level = 5  # copy from ssd_efficientnet_bifpn_feature_extractor.py
+        self._output_layer_alias = [
+            'level_{}'.format(i)
+            for i in range(bifpn_min_level, self._backbone_max_level + 1)]
+        self._bifpn_stage = None
+        self.build(None)
+
+
+
+    def build(self, input_shape):
+        self._bifpn_stage = bifpn_generators.KerasBiFpnFeatureMaps(
+            bifpn_num_iterations=self._bifpn_num_iterations,
+            bifpn_num_filters=self._bifpn_num_filters,
+            fpn_min_level=self._bifpn_min_level,
+            fpn_max_level=self._bifpn_max_level,
+            input_max_level=self._backbone_max_level,
+            is_training=self._is_training,
+            conv_hyperparams=self._keras_conv_hyperparams,
+            freeze_batchnorm=self._is_training,
+            bifpn_node_params=self._bifpn_node_params,
+            name='bifpn',
+            use_keras=False)
+        self.built = True
+
+    def extract_features(self, preprocessed_inputs):
+        feature_maps = super(SSDMobileDetDSPFeatureExtractorBifpn, self).extract_features(preprocessed_inputs)
+        kk = list(zip(self._output_layer_alias, feature_maps[:len(self._output_layer_alias)]))
+        output_feature_map_dict = self._bifpn_stage.call(kk
+                                                    )
+        return list(output_feature_map_dict.values())
+
 
 
 class SSDMobileDetEdgeTPUFeatureExtractor(SSDMobileDetFeatureExtractorBase):

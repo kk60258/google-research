@@ -87,7 +87,7 @@ def _create_bifpn_node_config(bifpn_num_iterations,
                               fpn_max_level,
                               input_max_level,
                               bifpn_node_params=None,
-                              level_scales=None):
+                              level_scales=None, use_keras=True):
   """Creates a config specifying a bidirectional feature pyramid network.
 
   Args:
@@ -145,7 +145,7 @@ def _create_bifpn_node_config(bifpn_num_iterations,
           'fast_attention',
       'input_op':
           functools.partial(
-              _create_bifpn_resample_block, downsample_method='max_pooling'),
+              _create_bifpn_resample_block, downsample_method='max_pooling', use_keras=use_keras),
       'post_combine_op':
           functools.partial(
               bifpn_utils.create_conv_block,
@@ -156,7 +156,8 @@ def _create_bifpn_node_config(bifpn_num_iterations,
               use_separable=True,
               apply_batchnorm=True,
               apply_activation=True,
-              conv_bn_act_pattern=False),
+              conv_bn_act_pattern=False,
+              use_keras=use_keras),
   }
   if bifpn_node_params:
     default_node_params.update(bifpn_node_params)
@@ -235,7 +236,8 @@ def _create_bifpn_resample_block(name,
                                  use_native_resize_op=False,
                                  maybe_apply_1x1_conv=True,
                                  apply_1x1_pre_sampling=True,
-                                 apply_1x1_post_sampling=False):
+                                 apply_1x1_post_sampling=False,
+                                 use_keras=True):
   """Creates resample block layers for input feature maps to BiFPN nodes.
 
   Args:
@@ -286,14 +288,15 @@ def _create_bifpn_resample_block(name,
             apply_activation=False,
             conv_hyperparams=conv_hyperparams,
             is_training=is_training,
-            freeze_batchnorm=freeze_batchnorm))
+            freeze_batchnorm=freeze_batchnorm,
+            use_keras=use_keras))
 
   layers.extend(
       bifpn_utils.create_resample_feature_map_ops(input_scale, output_scale,
                                                   downsample_method,
                                                   use_native_resize_op,
                                                   conv_hyperparams, is_training,
-                                                  freeze_batchnorm, name))
+                                                  freeze_batchnorm, name, use_keras=use_keras))
 
   if apply_1x1_post_sampling:
     layers.extend(
@@ -308,12 +311,13 @@ def _create_bifpn_resample_block(name,
             apply_activation=False,
             conv_hyperparams=conv_hyperparams,
             is_training=is_training,
-            freeze_batchnorm=freeze_batchnorm))
+            freeze_batchnorm=freeze_batchnorm,
+            use_keras=use_keras))
 
   return layers
 
 
-def _create_bifpn_combine_op(num_inputs, name, combine_method):
+def _create_bifpn_combine_op(num_inputs, name, combine_method, use_keras=True):
   """Creates a BiFPN output config, a list of the output BiFPN node names.
 
   Args:
@@ -332,8 +336,12 @@ def _create_bifpn_combine_op(num_inputs, name, combine_method):
   elif num_inputs == 1:
     combine_op = lambda x: x[0]
   else:
-    combine_op = bifpn_utils.BiFPNCombineLayer(
-        combine_method=combine_method, name=name)
+    if use_keras:
+        combine_op = bifpn_utils.BiFPNCombineLayer(
+            combine_method=combine_method, name=name)
+    else:
+        combine_op = bifpn_utils.BiFPNCombineLayerWrapper(
+            combine_method=combine_method, name=name)
   return combine_op
 
 
@@ -355,7 +363,7 @@ class KerasBiFpnFeatureMaps(tf.keras.Model):
                conv_hyperparams,
                freeze_batchnorm,
                bifpn_node_params=None,
-               name=None):
+               name=None, use_keras=True):
     """Constructor.
 
     Args:
@@ -419,14 +427,16 @@ class KerasBiFpnFeatureMaps(tf.keras.Model):
             output_num_channels=node_config['num_channels'],
             conv_hyperparams=conv_hyperparams,
             is_training=is_training,
-            freeze_batchnorm=freeze_batchnorm)
+            freeze_batchnorm=freeze_batchnorm,
+            use_keras=use_keras)
         input_blocks.append((input_index, input_block))
 
       # Combine input feature maps.
       combine_op = _create_bifpn_combine_op(
           num_inputs=len(input_blocks),
           name=(node_config['name'] + '/combine'),
-          combine_method=node_config['combine_method'])
+          combine_method=node_config['combine_method'],
+          use_keras=use_keras)
 
       # Post-combine layers.
       post_combine_block = []
@@ -435,7 +445,8 @@ class KerasBiFpnFeatureMaps(tf.keras.Model):
             name=node_config['name'] + '/post_combine/',
             conv_hyperparams=conv_hyperparams,
             is_training=is_training,
-            freeze_batchnorm=freeze_batchnorm))
+            freeze_batchnorm=freeze_batchnorm,
+            use_keras=use_keras))
 
       self.node_input_blocks.append(input_blocks)
       self.node_combine_op.append(combine_op)
