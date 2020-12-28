@@ -446,7 +446,8 @@ class BiFPNCombineLayer(tf.keras.layers.Layer):
                        'on a list of at least 2 inputs. '
                        'Got ' + str(len(input_shape)) + ' inputs.')
     if self.combine_method == 'sum':
-      self._combine_op = tf.keras.layers.Add()
+      # self._combine_op = tf.keras.layers.Add()
+      self._combine_op = tf.math.add_n
     elif self.combine_method == 'weighted_sum':
       self._combine_op = self._combine_weighted_sum
     elif self.combine_method == 'attention':
