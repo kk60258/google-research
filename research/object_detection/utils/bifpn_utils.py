@@ -454,6 +454,8 @@ class BiFPNCombineLayer(tf.keras.layers.Layer):
       self._combine_op = self._combine_attention
     elif self.combine_method == 'fast_attention':
       self._combine_op = self._combine_fast_attention
+    elif self.combine_method == 'concat':
+        self._combine_op = functools.partial(tf.concat, axis=-1)
     else:
       raise ValueError('Unknown combine type: {}'.format(self.combine_method))
     if self.combine_method in {'weighted_sum', 'attention', 'fast_attention'}:
