@@ -30,7 +30,7 @@ from object_detection.core import standard_fields as fields
 from object_detection.utils import shape_utils
 from object_detection.utils import spatial_transform_ops as spatial_ops
 from object_detection.utils import static_shape
-
+import numpy as np
 
 matmul_crop_and_resize = spatial_ops.matmul_crop_and_resize
 multilevel_roi_align = spatial_ops.multilevel_roi_align
@@ -1181,6 +1181,126 @@ def giou(boxes1, boxes2):
     return giou_
 
   return shape_utils.static_or_dynamic_map_fn(_two_boxes_giou, [boxes1, boxes2])
+
+
+def diou(boxes1, boxes2):
+    """Computes generalized IOU between two tensors.
+
+    Each box should be represented as [ymin, xmin, ymax, xmax].
+
+    Args:
+      boxes1: a tensor with shape [num_boxes, 4]
+      boxes2: a tensor with shape [num_boxes, 4]
+
+    Returns:
+      a tensor of shape [num_boxes] containing GIoUs
+
+    """
+    def _two_boxes_diou(boxes):
+        """Compute giou between two boxes."""
+        boxes1, boxes2 = boxes
+
+        pred_ymin, pred_xmin, pred_ymax, pred_xmax = tf.split(value=boxes1, num_or_size_splits=4, axis=1)
+        gt_ymin, gt_xmin, gt_ymax, gt_xmax = tf.split(value=boxes2, num_or_size_splits=4, axis=1)
+
+        min_ymax = tf.minimum(pred_ymax, gt_ymax)
+        max_ymin = tf.maximum(pred_ymin, gt_ymin)
+        intersect_heights = tf.maximum(0.0, min_ymax - max_ymin)
+
+        min_xmax = tf.minimum(pred_xmax, gt_xmax)
+        max_xmin = tf.maximum(pred_xmin, gt_xmin)
+        intersect_widths = tf.maximum(0.0, min_xmax - max_xmin)
+        intersect_area = tf.reshape(intersect_heights * intersect_widths, [-1])
+
+        gt_area = tf.squeeze((gt_ymax - gt_ymin) * (gt_xmax - gt_xmin), [1])
+        pred_area = tf.squeeze((pred_ymax - pred_ymin) * (pred_xmax - pred_xmin), [1])
+
+        union_area = gt_area + pred_area - intersect_area
+        iou = tf.where(
+            tf.equal(intersect_area, 0.0), tf.zeros_like(intersect_area), tf.math.divide_no_nan(intersect_area, union_area))
+
+
+        gt_center_y = (gt_ymax + gt_ymin) / 2.0
+        gt_center_x = (gt_xmax + gt_xmin) / 2.0
+        pred_center_y = (pred_ymax + pred_ymin) / 2.0
+        pred_center_x = (pred_xmax + pred_xmin) / 2.0
+        center_distance = tf.squeeze((pred_center_x - gt_center_x)**2 + (pred_center_y - gt_center_y)**2, [1])
+
+        x1_c = tf.minimum(pred_xmin, gt_xmin)
+        x2_c = tf.maximum(pred_xmax, gt_xmax)
+        y1_c = tf.minimum(pred_ymin, gt_ymin)
+        y2_c = tf.maximum(pred_ymax, gt_ymax)
+        hull_area_diagonal_distance = tf.squeeze((y2_c - y1_c)**2 + (x2_c - x1_c)**2, [1])
+
+        diou_ = iou - tf.math.divide_no_nan(center_distance, hull_area_diagonal_distance)
+
+        return diou_
+
+    # return shape_utils.static_or_dynamic_map_fn(_two_boxes_diou, [boxes1, boxes2])
+    return _two_boxes_diou([boxes1, boxes2])
+
+
+def ciou(boxes1, boxes2):
+    """Computes generalized IOU between two tensors.
+
+    Each box should be represented as [ymin, xmin, ymax, xmax].
+
+    Args:
+      boxes1: a tensor with shape [num_boxes, 4]
+      boxes2: a tensor with shape [num_boxes, 4]
+
+    Returns:
+      a tensor of shape [num_boxes] containing GIoUs
+
+    """
+    def _two_boxes_ciou(boxes):
+        """Compute giou between two boxes."""
+        boxes1, boxes2 = boxes
+
+        pred_ymin, pred_xmin, pred_ymax, pred_xmax = tf.split(value=boxes1, num_or_size_splits=4, axis=1)
+        gt_ymin, gt_xmin, gt_ymax, gt_xmax = tf.split(value=boxes2, num_or_size_splits=4, axis=1)
+
+        min_ymax = tf.minimum(pred_ymax, gt_ymax)
+        max_ymin = tf.maximum(pred_ymin, gt_ymin)
+        intersect_heights = tf.maximum(0.0, min_ymax - max_ymin)
+
+        min_xmax = tf.minimum(pred_xmax, gt_xmax)
+        max_xmin = tf.maximum(pred_xmin, gt_xmin)
+        intersect_widths = tf.maximum(0.0, min_xmax - max_xmin)
+        intersect_area = tf.reshape(intersect_heights * intersect_widths, [-1])
+
+        gt_area = tf.squeeze((gt_ymax - gt_ymin) * (gt_xmax - gt_xmin), [1])
+        pred_area = tf.squeeze((pred_ymax - pred_ymin) * (pred_xmax - pred_xmin), [1])
+
+        union_area = gt_area + pred_area - intersect_area
+        iou = tf.where(
+            tf.equal(intersect_area, 0.0), tf.zeros_like(intersect_area), tf.math.divide_no_nan(intersect_area, union_area))
+
+
+        gt_center_y = (gt_ymax + gt_ymin) / 2.0
+        gt_center_x = (gt_xmax + gt_xmin) / 2.0
+        pred_center_y = (pred_ymax + pred_ymin) / 2.0
+        pred_center_x = (pred_xmax + pred_xmin) / 2.0
+        center_distance = tf.squeeze((pred_center_x - gt_center_x)**2 + (pred_center_y - gt_center_y)**2, [1])
+
+        hull_xmin = tf.minimum(pred_xmin, gt_xmin)
+        hull_xmax = tf.maximum(pred_xmax, gt_xmax)
+        hull_ymin = tf.minimum(pred_ymin, gt_ymin)
+        hull_ymax = tf.maximum(pred_ymax, gt_ymax)
+        hull_area_diagonal_distance = tf.squeeze((hull_ymax - hull_ymin)**2 + (hull_xmax - hull_xmin)**2, [1])
+
+        diou_ = iou - tf.math.divide_no_nan(center_distance, hull_area_diagonal_distance)
+
+        pi = tf.convert_to_tensor(np.pi)
+        gt_bb_ratio = tf.math.atan(tf.squeeze(tf.math.divide_no_nan(gt_xmax - gt_xmin, gt_ymax- gt_ymin), [1]))
+        pred_bb_ratio = tf.math.atan(tf.squeeze(tf.math.divide_no_nan(pred_xmax - pred_xmin, pred_ymax- pred_ymin), [1]))
+        v = (4.0 / pi**2) * tf.square(gt_bb_ratio - pred_bb_ratio)
+        alpha = tf.math.divide_no_nan(v, 1 - iou + v)
+        ciou_ = diou_ + alpha * v
+        return  ciou_
+
+    # return shape_utils.static_or_dynamic_map_fn(_two_boxes_diou, [boxes1, boxes2])
+    return _two_boxes_ciou([boxes1, boxes2])
 
 
 def center_to_corner_coordinate(input_tensor):
