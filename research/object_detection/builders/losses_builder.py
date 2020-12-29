@@ -201,6 +201,15 @@ def _build_localization_loss(loss_config):
   if loss_type == 'weighted_iou':
     return losses.WeightedIOULocalizationLoss()
 
+  # if loss_type == 'weighted_giou':
+  #     return losses.WeightedGIOULocalizationLoss()
+
+  if loss_type == 'weighted_diou':
+      return losses.WeightedDIOULocalizationLoss()
+
+  if loss_type == 'weighted_ciou':
+      return losses.WeightedCIOULocalizationLoss()
+
   if loss_type == 'l1_localization_loss':
     return losses.L1LocalizationLoss()
 

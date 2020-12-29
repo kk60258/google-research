@@ -70,6 +70,9 @@ message LocalizationLoss {
     WeightedSmoothL1LocalizationLoss weighted_smooth_l1 = 2;
     WeightedIOULocalizationLoss weighted_iou = 3;
     L1LocalizationLoss l1_localization_loss = 4;
+    WeightedGIOULocalizationLoss weighted_giou = 5;
+    WeightedDIOULocalizationLoss weighted_diou = 6;
+    WeightedDIOULocalizationLoss weighted_ciou = 7;
   }
 }
 
@@ -95,6 +98,14 @@ message WeightedSmoothL1LocalizationLoss {
 
 // Intersection over union location loss: 1 - IOU
 message WeightedIOULocalizationLoss {
+}
+
+// Intersection over union location loss: GIOU
+message WeightedGIOULocalizationLoss {
+}
+
+// Intersection over union location loss: DIOU
+message WeightedDIOULocalizationLoss {
 }
 
 // L1 Localization Loss.
