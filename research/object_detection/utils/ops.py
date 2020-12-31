@@ -1233,7 +1233,6 @@ def diou(boxes1, boxes2):
         hull_area_diagonal_distance = tf.squeeze((y2_c - y1_c)**2 + (x2_c - x1_c)**2, [1])
 
         diou_ = iou - tf.math.divide_no_nan(center_distance, hull_area_diagonal_distance)
-
         return diou_
 
     # return shape_utils.static_or_dynamic_map_fn(_two_boxes_diou, [boxes1, boxes2])

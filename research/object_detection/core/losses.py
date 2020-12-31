@@ -112,6 +112,10 @@ class Loss(six.with_metaclass(abc.ABCMeta, object)):
     """
     pass
 
+  @property
+  def use_decoded_boxes(self):
+      return False
+
 
 class WeightedL2LocalizationLoss(Loss):
   """L2 localization loss function with anchorwise output support.
@@ -210,6 +214,10 @@ class WeightedIOULocalizationLoss(Loss):
                                                          target_boxes)
     return tf.reshape(weights, [-1]) * per_anchor_iou_loss
 
+  @property
+  def use_decoded_boxes(self):
+    return True
+
 
 class WeightedGIOULocalizationLoss(Loss):
   """GIOU localization loss function.
@@ -242,6 +250,11 @@ class WeightedGIOULocalizationLoss(Loss):
     return tf.reshape(tf.reshape(weights, [-1]) * per_anchor_iou_loss,
                       [batch_size, num_anchors])
 
+  @property
+  def use_decoded_boxes(self):
+      return True
+
+
 class WeightedDIOULocalizationLoss(Loss):
     """DIOU localization loss function.
 
@@ -269,6 +282,10 @@ class WeightedDIOULocalizationLoss(Loss):
         per_anchor_iou_loss = 1 - ops.diou(predicted_boxes, target_boxes)
         return tf.reshape(tf.reshape(weights, [-1]) * per_anchor_iou_loss,
                           [batch_size, num_anchors])
+
+    @property
+    def use_decoded_boxes(self):
+        return True
 
 
 class WeightedCIOULocalizationLoss(Loss):
@@ -298,6 +315,10 @@ class WeightedCIOULocalizationLoss(Loss):
         per_anchor_iou_loss = 1 - ops.ciou(predicted_boxes, target_boxes)
         return tf.reshape(tf.reshape(weights, [-1]) * per_anchor_iou_loss,
                           [batch_size, num_anchors])
+
+    @property
+    def use_decoded_boxes(self):
+        return True
 
 
 class WeightedSigmoidClassificationLoss(Loss):
