@@ -25,6 +25,8 @@ from object_detection.core import standard_fields
 from object_detection.utils import dataset_util
 
 
+# /m/01g317	Person
+
 def tf_example_from_annotations_data_frame(annotations_data_frame, label_map,
                                            encoded_image):
   """Populates a TF Example message with image annotations from a data frame.
