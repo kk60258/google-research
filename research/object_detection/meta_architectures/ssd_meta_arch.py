@@ -870,9 +870,15 @@ class SSDMetaArch(model.DetectionModel):
         losses_mask = tf.stack(self.groundtruth_lists(
             fields.InputDataFields.is_annotated))
 
+      if self._localization_loss.use_decoded_boxes:
+          decoded_boxes, _ = self._batch_decode(prediction_dict['box_encodings'],
+                                                prediction_dict['anchors'])
+          prediction_to_count_loss = decoded_boxes
+      else:
+          prediction_to_count_loss =  prediction_dict['box_encodings']
 
       location_losses = self._localization_loss(
-          prediction_dict['box_encodings'],
+          prediction_to_count_loss,
           batch_reg_targets,
           ignore_nan_targets=True,
           weights=batch_reg_weights,
