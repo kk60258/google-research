@@ -1177,7 +1177,7 @@ def giou(boxes1, boxes2):
         tf.equal(union_area, 0.0), 0.0, intersection_area / union_area)
     giou_ = iou - tf.where(hull_area > 0.0,
                            (hull_area - union_area) / hull_area, iou)
-
+    giou_ = tf.clip_by_value(giou_, clip_value_min=-1.0, clip_value_max=1.0)
     return giou_
 
   return shape_utils.static_or_dynamic_map_fn(_two_boxes_giou, [boxes1, boxes2])
@@ -1233,6 +1233,7 @@ def diou(boxes1, boxes2):
         hull_area_diagonal_distance = tf.squeeze((y2_c - y1_c)**2 + (x2_c - x1_c)**2, [1])
 
         diou_ = iou - tf.math.divide_no_nan(center_distance, hull_area_diagonal_distance)
+        diou_ = tf.clip_by_value(diou_, clip_value_min=-1.0, clip_value_max=1.0)
         return diou_
 
     # return shape_utils.static_or_dynamic_map_fn(_two_boxes_diou, [boxes1, boxes2])
@@ -1294,8 +1295,12 @@ def ciou(boxes1, boxes2):
         gt_bb_ratio = tf.math.atan(tf.squeeze(tf.math.divide_no_nan(gt_xmax - gt_xmin, gt_ymax- gt_ymin), [1]))
         pred_bb_ratio = tf.math.atan(tf.squeeze(tf.math.divide_no_nan(pred_xmax - pred_xmin, pred_ymax- pred_ymin), [1]))
         v = (4.0 / pi**2) * tf.square(gt_bb_ratio - pred_bb_ratio)
-        alpha = tf.math.divide_no_nan(v, 1 - iou + v)
-        ciou_ = diou_ + alpha * v
+        # stop gradient on alpha
+        s = tf.stop_gradient(1 - iou)
+        alpha = tf.stop_gradient(tf.math.divide_no_nan(v, s + v))
+
+        ciou_ = diou_ - alpha * v
+        ciou_ = tf.clip_by_value(ciou_, clip_value_min=-1.0, clip_value_max=1.0)
         return  ciou_
 
     # return shape_utils.static_or_dynamic_map_fn(_two_boxes_diou, [boxes1, boxes2])
