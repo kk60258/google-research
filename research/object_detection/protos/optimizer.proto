@@ -93,4 +93,5 @@ message CosineDecayLearningRate {
   optional float warmup_learning_rate = 3 [default = 0.0002];
   optional uint32 warmup_steps = 4 [default = 10000];
   optional uint32 hold_base_rate_steps = 5 [default = 0];
+  optional float min_learning_rate = 6 [default = 0.0];
 }
