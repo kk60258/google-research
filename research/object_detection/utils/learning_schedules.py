@@ -87,7 +87,8 @@ def cosine_decay_with_warmup(global_step,
                              total_steps,
                              warmup_learning_rate=0.0,
                              warmup_steps=0,
-                             hold_base_rate_steps=0):
+                             hold_base_rate_steps=0,
+                             min_learning_rate=0):
   """Cosine decay schedule with warm up period.
 
   Cosine annealing learning rate as described in:
@@ -126,6 +127,8 @@ def cosine_decay_with_warmup(global_step,
         np.pi *
         (tf.cast(global_step, tf.float32) - warmup_steps - hold_base_rate_steps
         ) / float(total_steps - warmup_steps - hold_base_rate_steps)))
+    learning_rate = tf.maximum(learning_rate, min_learning_rate)
+
     if hold_base_rate_steps > 0:
       learning_rate = tf.where(
           global_step > warmup_steps + hold_base_rate_steps,
