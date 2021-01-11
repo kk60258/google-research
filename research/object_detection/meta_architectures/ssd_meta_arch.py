@@ -874,12 +874,15 @@ class SSDMetaArch(model.DetectionModel):
           decoded_boxes, _ = self._batch_decode(prediction_dict['box_encodings'],
                                                 prediction_dict['anchors'])
           prediction_to_count_loss = decoded_boxes
+          # gt_to_count_loss = tf.cast(batch_match, dtype=tf.float32)  # batch_match is gt indices.
+          gt_to_count_loss, _ = self._batch_decode(batch_reg_targets, prediction_dict['anchors'])
       else:
           prediction_to_count_loss =  prediction_dict['box_encodings']
+          gt_to_count_loss = batch_reg_targets
 
       location_losses = self._localization_loss(
           prediction_to_count_loss,
-          batch_reg_targets,
+          gt_to_count_loss,
           ignore_nan_targets=True,
           weights=batch_reg_weights,
           losses_mask=losses_mask)
