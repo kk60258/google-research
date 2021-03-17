@@ -16,6 +16,7 @@
 """A function to build an object detection matcher from configuration."""
 
 from object_detection.matchers import argmax_matcher
+from object_detection.matchers import atss_matcher
 from object_detection.protos import matcher_pb2
 from object_detection.utils import tf_version
 
@@ -38,6 +39,11 @@ def build(matcher_config):
   """
   if not isinstance(matcher_config, matcher_pb2.Matcher):
     raise ValueError('matcher_config not of type matcher_pb2.Matcher.')
+  if matcher_config.WhichOneof('matcher_oneof') == 'atss_matcher':
+      matcher = matcher_config.atss_matcher
+      return atss_matcher.AtssMatcher(
+          use_matmul_gather=matcher.use_matmul_gather,
+          number_sample_per_level_per_anchor_on_loc=matcher.number_sample_per_level_per_anchor_on_loc)
   if matcher_config.WhichOneof('matcher_oneof') == 'argmax_matcher':
     matcher = matcher_config.argmax_matcher
     matched_threshold = unmatched_threshold = None

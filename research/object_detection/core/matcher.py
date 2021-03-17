@@ -229,7 +229,7 @@ class Matcher(six.with_metaclass(abc.ABCMeta, object)):
     """
     self._use_matmul_gather = use_matmul_gather
 
-  def match(self, similarity_matrix, valid_rows=None, scope=None):
+  def match(self, similarity_matrix, valid_rows=None, scope=None, **kwargs):
     """Computes matches among row and column indices and returns the result.
 
     Computes matches among the row and column indices based on the similarity
@@ -248,11 +248,11 @@ class Matcher(six.with_metaclass(abc.ABCMeta, object)):
     with tf.name_scope(scope, 'Match') as scope:
       if valid_rows is None:
         valid_rows = tf.ones(tf.shape(similarity_matrix)[0], dtype=tf.bool)
-      return Match(self._match(similarity_matrix, valid_rows),
+      return Match(self._match(similarity_matrix, valid_rows, **kwargs),
                    self._use_matmul_gather)
 
   @abc.abstractmethod
-  def _match(self, similarity_matrix, valid_rows):
+  def _match(self, similarity_matrix, valid_rows, **kwargs):
     """Method to be overridden by implementations.
 
     Args:

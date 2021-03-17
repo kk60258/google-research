@@ -52,6 +52,7 @@ from object_detection.core import region_similarity_calculator as sim_calc
 from object_detection.core import standard_fields as fields
 from object_detection.matchers import argmax_matcher
 from object_detection.matchers import hungarian_matcher
+from object_detection.matchers import atss_matcher
 from object_detection.utils import shape_utils
 from object_detection.utils import target_assigner_utils as ta_utils
 from object_detection.utils import tf_version
@@ -108,7 +109,8 @@ class TargetAssigner(object):
              groundtruth_boxes,
              groundtruth_labels=None,
              unmatched_class_label=None,
-             groundtruth_weights=None):
+             groundtruth_weights=None,
+             **kwargs):
     """Assign classification and regression targets to each anchor.
 
     For a given set of anchors and groundtruth detections, match anchors
@@ -197,8 +199,12 @@ class TargetAssigner(object):
         [unmatched_shape_assert, labels_and_box_shapes_assert]):
       match_quality_matrix = self._similarity_calc.compare(groundtruth_boxes,
                                                            anchors)
+
+      kwargs.update({'gt_boxes': groundtruth_boxes, 'anchors': anchors})
       match = self._matcher.match(match_quality_matrix,
-                                  valid_rows=tf.greater(groundtruth_weights, 0))
+                            valid_rows=tf.greater(groundtruth_weights, 0),
+                            **kwargs)
+
       reg_targets = self._create_regression_targets(anchors,
                                                     groundtruth_boxes,
                                                     match)
@@ -447,7 +453,8 @@ def batch_assign(target_assigner,
                  gt_box_batch,
                  gt_class_targets_batch,
                  unmatched_class_label=None,
-                 gt_weights_batch=None):
+                 gt_weights_batch=None,
+                 **kwargs):
   """Batched assignment of classification and regression targets.
 
   Args:
@@ -512,7 +519,7 @@ def batch_assign(target_assigner,
     (cls_targets, cls_weights,
      reg_targets, reg_weights, match) = target_assigner.assign(
          anchors, gt_boxes, gt_class_targets, unmatched_class_label,
-         gt_weights)
+         gt_weights, **kwargs)
     cls_targets_list.append(cls_targets)
     cls_weights_list.append(cls_weights)
     reg_targets_list.append(reg_targets)
@@ -2189,7 +2196,8 @@ class DETRTargetAssigner(object):
              pred_classes,
              gt_labels,
              gt_weights=None,
-             unmatched_class_label=None):
+             unmatched_class_label=None,
+             **kwargs):
     """Assign classification and regression targets to each box_pred.
 
     For a given set of pred_boxes and groundtruth detections, match pred_boxes
@@ -2246,6 +2254,7 @@ class DETRTargetAssigner(object):
 
     gt_boxes.add_field(fields.BoxListFields.classes, gt_labels)
     pred_boxes.add_field(fields.BoxListFields.classes, pred_classes)
+
 
     match_quality_matrix = self._similarity_calc.compare(
         gt_boxes,
