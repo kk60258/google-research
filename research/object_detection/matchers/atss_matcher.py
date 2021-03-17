@@ -134,10 +134,14 @@ class AtssMatcher(matcher.Matcher):
       candidate_anchors = self._gather_op(anchors_tensor, candidate_indices)
       # calculate center requirement that anchor center must be inside gt_box
       gt_boxes_tensor_expanded = tf.expand_dims(gt_boxes_tensor, 1)
-      top = gt_boxes_tensor_expanded[..., 0] - candidate_anchors[..., 0]
-      left = gt_boxes_tensor_expanded[..., 1] - candidate_anchors[..., 1]
-      bottom = candidate_anchors[..., 2] - gt_boxes_tensor_expanded[..., 2]
-      right = candidate_anchors[..., 3] - gt_boxes_tensor_expanded[..., 3]
+      candidate_anchors_center_y = (candidate_anchors[..., 0] + candidate_anchors[..., 3]) * 0.5
+      candidate_anchors_center_x = (candidate_anchors[..., 1] + candidate_anchors[..., 2]) * 0.5
+      # cy_anchor - y1_gt > 0 and y2_gt - cy_anchor > 0
+      # cx_anchor - x1_gt > 0 and x2_gt - cx_anchor > 0
+      top = candidate_anchors_center_y - gt_boxes_tensor_expanded[..., 0]
+      left = candidate_anchors_center_x - gt_boxes_tensor_expanded[..., 1]
+      bottom = gt_boxes_tensor_expanded[..., 2] - candidate_anchors_center_y
+      right = gt_boxes_tensor_expanded[..., 3] - candidate_anchors_center_x
       diff = tf.stack([top, left, bottom, right], -1)
       candidate_center_pass_indices = tf.greater(tf.math.reduce_min(diff, -1), 0)
 
