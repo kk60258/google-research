@@ -35,7 +35,7 @@ class GreedyBipartiteMatcher(matcher.Matcher):
     super(GreedyBipartiteMatcher, self).__init__(
         use_matmul_gather=use_matmul_gather)
 
-  def _match(self, similarity_matrix, valid_rows):
+  def _match(self, similarity_matrix, valid_rows, **kwargs):
     """Bipartite matches a collection rows and columns. A greedy bi-partite.
 
     TODO(rathodv): Add num_valid_columns options to match only that many columns

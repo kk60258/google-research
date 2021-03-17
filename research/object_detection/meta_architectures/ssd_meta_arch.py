@@ -425,6 +425,8 @@ class SSDMetaArch(model.DetectionModel):
     self._non_max_suppression_fn = non_max_suppression_fn
     self._score_conversion_fn = score_conversion_fn
 
+    self._anchor_level_indices = None
+    self._feature_map_spatial_dims = None
     self._anchors = None
     self._add_summaries = add_summaries
     self._batched_prediction_tensor_names = []
@@ -586,6 +588,13 @@ class SSDMetaArch(model.DetectionModel):
         feature_map_spatial_dims,
         im_height=image_shape[1],
         im_width=image_shape[2])
+
+    anchor_level_indices = []
+    for box_list in boxlist_list:
+        anchor_level_indices.append(box_list.data['feature_map_index'].shape.as_list()[0])
+
+    self._anchor_level_indices = anchor_level_indices  ## [1083, 600, 150, 54, 24, 6]
+    self._feature_map_spatial_dims = feature_map_spatial_dims
     self._anchors = box_list_ops.concatenate(boxlist_list)
     if self._box_predictor.is_keras_model:
       predictor_results_dict = self._box_predictor(feature_maps)
@@ -1089,7 +1098,9 @@ class SSDMetaArch(model.DetectionModel):
           groundtruth_boxlists,
           groundtruth_classes_with_background_list,
           self._unmatched_class_label,
-          groundtruth_weights_list)
+          groundtruth_weights_list,
+          anchor_level_indices=self._anchor_level_indices,
+          feature_map_spatial_dims=self._feature_map_spatial_dims)
 
   def _summarize_target_assignment(self, groundtruth_boxes_list, match_list):
     """Creates tensorflow summaries for the input boxes and anchors.

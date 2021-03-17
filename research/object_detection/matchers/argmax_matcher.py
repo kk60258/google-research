@@ -105,7 +105,7 @@ class ArgMaxMatcher(matcher.Matcher):
     self._force_match_for_each_row = force_match_for_each_row
     self._negatives_lower_than_unmatched = negatives_lower_than_unmatched
 
-  def _match(self, similarity_matrix, valid_rows):
+  def _match(self, similarity_matrix, valid_rows, **kwargs):
     """Tries to match each column of the similarity matrix to a row.
 
     Args:
