@@ -149,11 +149,15 @@ class AtssMatcher(matcher.Matcher):
       candidate_pass = tf.logical_and(candidate_iou_pass_indices, candidate_center_pass_indices)
       candidate_indices = tf.where(candidate_pass, candidate_indices, -1 * tf.ones(tf.shape(candidate_pass), dtype=tf.int32))
       candidate_indices_one_hot = tf.one_hot(candidate_indices, depth=tf.shape(anchors_tensor)[0])  # shape: (N, number of picks, M)
-      candidate_indice_matrix = tf.cast(tf.math.reduce_max(candidate_indices_one_hot, 1), tf.float32)  # shape: (N, M)
+      candidate_indice_matrix_binary = tf.cast(tf.math.reduce_max(candidate_indices_one_hot, 1), tf.float32)  # shape: (N, M)
 
       # if an anchor is matched to multiple gt_box, keep the one with largest iou.
-      iou_weighted_candidate_pick = candidate_indice_matrix * ious  # shape: (N, M)
+      iou_weighted_candidate_pick = candidate_indice_matrix_binary * ious  # shape: (N, M)
       matches = tf.argmax(iou_weighted_candidate_pick, axis=0, output_type=tf.int32)  # shape: (M)
+      
+      # add negative matches
+      negative_indicator = tf.equal(matches, 0)
+      matches = self._set_values_using_indicator(matches, negative_indicator, -1)
       return matches
 
     if similarity_matrix.shape.is_fully_defined():
