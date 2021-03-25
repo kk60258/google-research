@@ -33,6 +33,8 @@ from object_detection.utils import shape_utils
 from object_detection.utils import ops
 from object_detection.core import box_list
 
+DEBUG = False
+
 class AtssMatcher(matcher.Matcher):
   """Matcher based on AtssMatcher.
 
@@ -98,44 +100,66 @@ class AtssMatcher(matcher.Matcher):
       gt_boxes_tensor = gt_boxes.get()
       anchors_tensor = anchors.get()
 
+      print_op_list = []
       cy_gt = (gt_boxes_tensor[:, 0] + gt_boxes_tensor[:, 2]) * 0.5
       cx_gt = (gt_boxes_tensor[:, 1] + gt_boxes_tensor[:, 3]) * 0.5
 
       cy_anchors = (anchors_tensor[:, 0] + anchors_tensor[:, 2]) * 0.5
       cx_anchors = (anchors_tensor[:, 1] + anchors_tensor[:, 3]) * 0.5
       distance = -1 * ((tf.expand_dims(cy_anchors, 1) - tf.expand_dims(cy_gt, 0)) ** 2 + (tf.expand_dims(cx_anchors, 1) - tf.expand_dims(cx_gt, 0)) ** 2)
+      print_op_list.append(tf.print("cy_gt ", cy_gt, summarize=-1))
+      print_op_list.append(tf.print("cx_gt ", cx_gt, summarize=-1))
+      print_op_list.append(tf.print("cy_anchors ", cy_anchors, summarize=-1))
+      print_op_list.append(tf.print("cx_anchors ", cx_anchors, summarize=-1))
+      print_op_list.append(tf.print("distance ", distance, summarize=-1))
 
       candidate_indices_list = []
-      begin_index = 0
-
+      begin_index = tf.cast(0, tf.int32)
       # pick k candidates from each level by minimum distance.
       for number_anchors_per_level, spatial_size_per_level in zip(anchor_level_indices, feature_map_spatial_dims):
         last_index = begin_index + number_anchors_per_level
         distance_in_the_level = distance[begin_index:last_index, :]
-        k = int(number_anchors_per_level / (spatial_size_per_level[0] * spatial_size_per_level[1])) * self._number_sample_per_level_per_anchor_on_loc
+        k = tf.cast((number_anchors_per_level / (spatial_size_per_level[0] * spatial_size_per_level[1])) * self._number_sample_per_level_per_anchor_on_loc, tf.int32)
         k = tf.math.minimum(tf.shape(distance_in_the_level)[0], k)  # todo k??
+        print_op_list.append(tf.print("k ", k, "number_anchors_per_level ", number_anchors_per_level, summarize=-1))
         transpose = tf.transpose(distance_in_the_level, [1, 0])
-        _, top_k_indices = tf.math.top_k(transpose, k, sorted=False)
+        _, top_k_indices = tf.math.top_k(transpose, k, sorted=True)
+        print_op_list.append(tf.print("top_k_indices ", top_k_indices + begin_index, "number_anchors_per_level ", number_anchors_per_level, summarize=-1))
         candidate_indices_list.append(begin_index + top_k_indices)
         begin_index = last_index
 
       # concat all picked candidate
       candidate_indices = tf.concat(candidate_indices_list, axis=1) # shape: (N, number of picks)
+      candidate_indices = tf.cast(candidate_indices, dtype=tf.int32)
 
       # calculate iou requirement that iou > iou_mean + iou_std
       ious = similarity_matrix  # iou_calc.compare(gt_boxes, anchors)  # (N, M)
-      # candidate_ious = self._gather_op(ious, candidate_indices)
-      candidate_ious = tf.gather(ious, candidate_indices, axis=1, batch_dims=1)  # (N, M), (N, number of picks), axis=1, batch_dims=1 => N, number of picks
-      candidate_ious_mean = tf.math.reduce_mean(candidate_ious, axis=-1)
-      candidate_ious_std = tf.math.sqrt(tf.math.reduce_variance(candidate_ious, axis=-1))
-      candidate_ious_threshold = tf.expand_dims(candidate_ious_mean + candidate_ious_std, -1)
-      candidate_iou_pass_indices = tf.greater(candidate_ious, candidate_ious_threshold)
 
+      print_op_list.append(tf.print("candidate_indices ", candidate_indices, summarize=-1))
+      print_op_list.append(tf.print("ious ", ious, summarize=-1))
+      # candidate_ious = self._gather_op(ious, candidate_indices)
+      candidate_gathered_ious = tf.gather(ious, candidate_indices, axis=1, batch_dims=1)  # (N, M), (N, number of picks), axis=1, batch_dims=1 => N, number of picks
+      print_op_list.append(tf.print("candidate_gathered_ious ", candidate_gathered_ious, summarize=-1))
+
+      candidate_gathered_ious_mean = tf.math.reduce_mean(candidate_gathered_ious, axis=-1)
+      candidate_gathered_ious_std = tf.math.sqrt(tf.math.reduce_variance(candidate_gathered_ious, axis=-1))
+      candidate_gathered_ious_threshold = tf.expand_dims(candidate_gathered_ious_mean + candidate_gathered_ious_std, -1)
+      candidate_gathered_iou_pass_indices = tf.greater(candidate_gathered_ious, candidate_gathered_ious_threshold)
+
+      print_op_list.append(tf.print("candidate_gathered_ious_mean ", candidate_gathered_ious_mean, summarize=-1))
+      print_op_list.append(tf.print("candidate_gathered_ious_variance ", tf.math.reduce_variance(candidate_gathered_ious, axis=-1), summarize=-1))
+      print_op_list.append(tf.print("candidate_gathered_ious_std ", candidate_gathered_ious_std, summarize=-1))
+      print_op_list.append(tf.print("candidate_gathered_ious_threshold ", candidate_gathered_ious_threshold, summarize=-1))
+      print_op_list.append(tf.print("candidate_gathered_iou_pass_indices ", candidate_gathered_iou_pass_indices, summarize=-1))
+
+
+      gt_boxes_tensor = tf.cast(gt_boxes_tensor, dtype=tf.float32)
+      anchors_tensor = tf.cast(anchors_tensor, dtype=tf.float32)
       candidate_anchors = self._gather_op(anchors_tensor, candidate_indices)
       # calculate center requirement that anchor center must be inside gt_box
       gt_boxes_tensor_expanded = tf.expand_dims(gt_boxes_tensor, 1)
-      candidate_anchors_center_y = (candidate_anchors[..., 0] + candidate_anchors[..., 3]) * 0.5
-      candidate_anchors_center_x = (candidate_anchors[..., 1] + candidate_anchors[..., 2]) * 0.5
+      candidate_anchors_center_y = (candidate_anchors[..., 0] + candidate_anchors[..., 2]) * 0.5
+      candidate_anchors_center_x = (candidate_anchors[..., 1] + candidate_anchors[..., 3]) * 0.5
       # cy_anchor - y1_gt > 0 and y2_gt - cy_anchor > 0
       # cx_anchor - x1_gt > 0 and x2_gt - cx_anchor > 0
       top = candidate_anchors_center_y - gt_boxes_tensor_expanded[..., 0]
@@ -145,20 +169,50 @@ class AtssMatcher(matcher.Matcher):
       diff = tf.stack([top, left, bottom, right], -1)
       candidate_center_pass_indices = tf.greater(tf.math.reduce_min(diff, -1), 0)
 
+      print_op_list.append(tf.print("anchors_tensor ", anchors_tensor, summarize=-1))
+      print_op_list.append(tf.print("candidate_anchors ", candidate_anchors, summarize=-1))
+      print_op_list.append(tf.print("candidate_indices ", candidate_indices, summarize=-1))
+      print_op_list.append(tf.print("candidate_anchors_center_y ", candidate_anchors_center_y, summarize=-1))
+      print_op_list.append(tf.print("candidate_anchors_center_x ", candidate_anchors_center_x, summarize=-1))
+      print_op_list.append(tf.print("candidate_center_pass_indices ", candidate_center_pass_indices, summarize=-1))
+
       #select candidates which matches iou and center requirement.
-      candidate_pass = tf.logical_and(candidate_iou_pass_indices, candidate_center_pass_indices)
-      candidate_indices = tf.where(candidate_pass, candidate_indices, -1 * tf.ones(tf.shape(candidate_pass), dtype=tf.int32))
-      candidate_indices_one_hot = tf.one_hot(candidate_indices, depth=tf.shape(anchors_tensor)[0])  # shape: (N, number of picks, M)
+      candidate_pass = tf.logical_and(candidate_gathered_iou_pass_indices, candidate_center_pass_indices)
+      candidate_indices_matrix = tf.where(candidate_pass, candidate_indices, -1 * tf.ones(tf.shape(candidate_pass), dtype=tf.int32))
+      candidate_indices_one_hot = tf.one_hot(candidate_indices_matrix, depth=tf.shape(anchors_tensor)[0])  # shape: (N, number of picks, M)
       candidate_indice_matrix_binary = tf.cast(tf.math.reduce_max(candidate_indices_one_hot, 1), tf.float32)  # shape: (N, M)
+
+      print_op_list.append(tf.print("anchors_tensor ", anchors_tensor, summarize=-1))
+      print_op_list.append(tf.print("candidate_anchors ", candidate_anchors, summarize=-1))
+      print_op_list.append(tf.print("candidate_indices ", candidate_indices, summarize=-1))
+      print_op_list.append(tf.print("candidate_gathered_iou_pass_indices ", candidate_gathered_iou_pass_indices, summarize=-1))
+      print_op_list.append(tf.print("candidate_center_pass_indices ", candidate_center_pass_indices, summarize=-1))
+      print_op_list.append(tf.print("candidate_pass ", candidate_pass, summarize=-1))
+      print_op_list.append(tf.print("candidate_indices_matrix ", candidate_indices_matrix, summarize=-1))
+      print_op_list.append(tf.print("candidate_indices_one_hot ", candidate_indices_one_hot, summarize=-1))
+      print_op_list.append(tf.print("candidate_indice_matrix_binary ", candidate_indice_matrix_binary, summarize=-1))
 
       # if an anchor is matched to multiple gt_box, keep the one with largest iou.
       iou_weighted_candidate_pick = candidate_indice_matrix_binary * ious  # shape: (N, M)
       matches = tf.argmax(iou_weighted_candidate_pick, axis=0, output_type=tf.int32)  # shape: (M)
-      
+
       # add negative matches
       negative_indicator = tf.equal(matches, 0)
-      matches = self._set_values_using_indicator(matches, negative_indicator, -1)
-      return matches
+      final_matches = self._set_values_using_indicator(matches, negative_indicator, -1)
+
+      print_op_list.append(tf.print("ious ", ious, summarize=-1))
+      print_op_list.append(tf.print("candidate_indice_matrix_binary ", candidate_indice_matrix_binary, summarize=-1))
+      print_op_list.append(tf.print("iou_weighted_candidate_pick ", iou_weighted_candidate_pick, summarize=-1))
+
+      print_op_list.append(tf.print("matches ", matches, summarize=-1))
+      print_op_list.append(tf.print("negative_indicator ", negative_indicator, summarize=-1))
+      print_op_list.append(tf.print("final_matches ", final_matches, summarize=-1))
+
+      if DEBUG:
+        with tf.control_dependencies(print_op_list):
+          final_matches = final_matches * 1
+
+      return final_matches
 
     if similarity_matrix.shape.is_fully_defined():
       if shape_utils.get_dim_as_int(similarity_matrix.shape[0]) == 0:
