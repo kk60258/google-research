@@ -47,4 +47,13 @@ message BidirectionalFeaturePyramidNetworks {
 
   // Method used to combine inputs to BiFPN nodes.
   optional string combine_method = 5 [default = 'fast_attention'];
+
+  // if spatial size is not the power of 2, it needs to set the upsampling size of each bifpn layer
+  repeated int32 up_sizes = 6;
+
+  // how many level will be extended in bifpn. The extend level also means how many levels we don't forward from backbone.
+  optional int32 extend_level = 7 [default = 2];
+
+  // set use_native_resize_op to true to make up_sizes works
+  optional bool use_native_resize_op = 8 [default = false];
 }
