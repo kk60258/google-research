@@ -370,6 +370,9 @@ def _build_ssd_feature_extractor(feature_extractor_config,
         'bifpn_num_iterations': feature_extractor_config.bifpn.num_iterations,
         'bifpn_num_filters': feature_extractor_config.bifpn.num_filters,
         'bifpn_combine_method': feature_extractor_config.bifpn.combine_method,
+        'bifpn_up_sizes': feature_extractor_config.bifpn.up_sizes,
+        'bifpn_extend_level': feature_extractor_config.bifpn.extend_level,
+        'bifpn_use_native_resize_op' : feature_extractor_config.bifpn.use_native_resize_op
     })
 
   if feature_type == 'ssd_mobiledet_dsp_bifpn':

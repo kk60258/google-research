@@ -543,6 +543,9 @@ class SSDMobileDetDSPFeatureExtractorBifpn(SSDMobileDetFeatureExtractorBase):
                  bifpn_num_iterations,
                  bifpn_num_filters,
                  bifpn_combine_method,
+                 bifpn_up_sizes,
+                 bifpn_extend_level,
+                 bifpn_use_native_resize_op,
                  keras_conv_hyperparams=None,
                  reuse_weights=None,
                  use_explicit_padding=False,
@@ -568,11 +571,13 @@ class SSDMobileDetDSPFeatureExtractorBifpn(SSDMobileDetFeatureExtractorBase):
         self._bifpn_num_iterations = bifpn_num_iterations
         self._bifpn_num_filters = max(bifpn_num_filters, min_depth)
         self._bifpn_node_params = {'combine_method': bifpn_combine_method}
-        self._backbone_max_level = 5  # copy from ssd_efficientnet_bifpn_feature_extractor.py
+        self._backbone_max_level = bifpn_max_level - bifpn_extend_level  # copy from ssd_efficientnet_bifpn_feature_extractor.py
         self._output_layer_alias = [
             'level_{}'.format(i)
             for i in range(bifpn_min_level, self._backbone_max_level + 1)]
         self._bifpn_stage = None
+        self._bifpn_up_sizes = bifpn_up_sizes[:]
+        self._bifpn_use_native_resize_op = bifpn_use_native_resize_op
         self.build(None)
 
 
@@ -589,7 +594,9 @@ class SSDMobileDetDSPFeatureExtractorBifpn(SSDMobileDetFeatureExtractorBase):
             freeze_batchnorm=self._is_training,
             bifpn_node_params=self._bifpn_node_params,
             name='bifpn',
-            use_keras=False)
+            use_keras=False,
+            up_sizes=self._bifpn_up_sizes,
+            use_native_resize_op=self._bifpn_use_native_resize_op)
         self.built = True
 
     def extract_features(self, preprocessed_inputs):

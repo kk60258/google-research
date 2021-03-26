@@ -286,7 +286,7 @@ def create_downsample_feature_map_ops(scale, downsample_method,
   return layers
 
 
-def create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras=True):
+def create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras=True, up_sizes=None):
   """Creates Keras layers for upsampling feature maps.
 
   Args:
@@ -303,11 +303,18 @@ def create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras
   """
   layers = []
   if use_native_resize_op:
+    def resize_nearest_neighbor(image, name, up_sizes):
+      if up_sizes:
+        image_shape = shape_utils.combined_static_and_dynamic_shape(image)
+        size = [up_sizes, up_sizes]
+      else:
+        image_shape = shape_utils.combined_static_and_dynamic_shape(image)
+        size = [image_shape[1] * scale, image_shape[2] * scale]
 
-    def resize_nearest_neighbor(image):
-      image_shape = shape_utils.combined_static_and_dynamic_shape(image)
       return tf.image.resize_nearest_neighbor(
-          image, [image_shape[1] * scale, image_shape[2] * scale])
+          image, size=size,
+          name=name)
+      # return tf.image.resize_nearest_neighbor(image)
     if use_keras:
         layers.append(
             tf.keras.layers.Lambda(
@@ -316,8 +323,8 @@ def create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras
     else:
         layers.append(functools.partial(
                     resize_nearest_neighbor,
-                    name=name + 'nearest_neighbor_upsampling_x{}'.format(scale)
-                )
+                    name=name + 'nearest_neighbor_upsampling_x{}'.format(up_sizes),
+                    up_sizes=up_sizes)
         )
   else:
 
@@ -342,7 +349,7 @@ def create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras
 def create_resample_feature_map_ops(input_scale_factor, output_scale_factor,
                                     downsample_method, use_native_resize_op,
                                     conv_hyperparams, is_training,
-                                    freeze_batchnorm, name, use_keras=True):
+                                    freeze_batchnorm, name, use_keras=True, up_sizes=None):
   """Creates Keras layers for downsampling or upsampling feature maps.
 
   Args:
@@ -386,7 +393,7 @@ def create_resample_feature_map_ops(input_scale_factor, output_scale_factor,
                        'output scale 1/{}'.format(input_scale_factor,
                                                   output_scale_factor))
     scale = input_scale_factor // output_scale_factor
-    return create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras)
+    return create_upsample_feature_map_ops(scale, use_native_resize_op, name, use_keras, up_sizes=up_sizes)
   else:
     return []
 
@@ -419,23 +426,34 @@ class BiFPNCombineLayer(tf.keras.layers.Layer):
     self.combine_method = combine_method
 
   def _combine_weighted_sum(self, inputs):
-    return tf.squeeze(
-        tf.linalg.matmul(tf.stack(inputs, axis=-1), self.per_input_weights),
-        axis=[-1])
+    return tf.reduce_sum(tf.stack(inputs, axis=-1) * self.per_input_weights, axis=-1)
 
   def _combine_attention(self, inputs):
     normalized_weights = tf.nn.softmax(self.per_input_weights)
-    return tf.squeeze(
-        tf.linalg.matmul(tf.stack(inputs, axis=-1), normalized_weights),
-        axis=[-1])
+    return tf.reduce_sum(tf.stack(inputs, axis=-1) * normalized_weights, axis=-1)
 
   def _combine_fast_attention(self, inputs):
-    weights_non_neg = tf.nn.relu(self.per_input_weights)
+    # weights_non_neg = tf.clip_by_value(self.per_input_weights, 0, 6) #tf.nn.relu(self.per_input_weights)
+    weights_non_neg = tf.nn.relu(self.per_input_weights + 0)
     normalizer = tf.reduce_sum(weights_non_neg) + 0.0001
     normalized_weights = weights_non_neg / normalizer
-    return tf.squeeze(
-        tf.linalg.matmul(tf.stack(inputs, axis=-1), normalized_weights),
-        axis=[-1])
+    # stacked_inputs = tf.stack(inputs, axis=-1)
+
+    # stacked_shape = shape_utils.combined_static_and_dynamic_shape(stacked_inputs)
+    # weight_shape = shape_utils.combined_static_and_dynamic_shape(normalized_weights)
+    # new_shape = stacked_shape[0:3] + weight_shape
+    # ones = tf.ones(new_shape)
+    # normalized_weights = normalized_weights * ones  # tf.broadcast_to(normalized_weights, new_shape)
+
+    # new_shape = [1 for _ in stacked_shape][0:-3]
+    # new_shape = new_shape + weight_shape
+    # normalized_weights = tf.reshape(normalized_weights, new_shape)
+
+    # fused_value = tf.matmul(stacked_inputs, normalized_weights)
+
+    # fused_value = stacked_inputs * normalized_weights
+    # fused_value = tf.reduce_sum(fused_value, axis=-1)
+    return tf.reduce_sum(tf.stack(inputs, axis=-1) * normalized_weights, axis=-1)
 
   def build(self, input_shape):
     if not isinstance(input_shape, list):
@@ -461,9 +479,10 @@ class BiFPNCombineLayer(tf.keras.layers.Layer):
     if self.combine_method in {'weighted_sum', 'attention', 'fast_attention'}:
       self.per_input_weights = self.add_weight(
           name='bifpn_combine_weights',
-          shape=(len(input_shape), 1),
+          shape=(len(input_shape)),
           initializer='ones',
           trainable=True)
+
     super(BiFPNCombineLayer, self).build(input_shape)
 
   def call(self, inputs):
@@ -494,6 +513,16 @@ class BiFPNCombineLayerWrapper(BiFPNCombineLayer):
     def __init__(self, **kwargs):
         super(BiFPNCombineLayerWrapper, self).__init__(**kwargs)
 
+    def build(self, input_shape):
+      super(BiFPNCombineLayerWrapper, self).build(input_shape)
+      if self.combine_method in {'weighted_sum', 'attention', 'fast_attention'}:
+        self.per_input_weights = tf.Variable(
+          name='bifpn_combine_weights',
+          shape=(len(input_shape)),
+          initial_value=tf.ones(shape=(len(input_shape))),
+          trainable=True)
+        # self.per_input_weights = tf.identity(self.per_input_weights)
+
     def __call__(self, *args, **kwargs):
-        super(BiFPNCombineLayerWrapper, self).build(args[0])
+        self.build(args[0])
         return self.call(args[0])
