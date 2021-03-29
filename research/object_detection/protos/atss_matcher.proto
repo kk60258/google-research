@@ -8,5 +8,5 @@ message AtssMatcher {
   // Force constructed match objects to use matrix multiplication based gather
   // instead of standard tf.gather
   optional bool use_matmul_gather = 1 [default = false];
-  optional int32 number_sample_per_level_per_anchor_on_loc = 2 [default = 9];
+  repeated float number_sample_per_level_per_anchor_on_loc = 2;
 }

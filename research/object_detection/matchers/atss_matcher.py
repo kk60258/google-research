@@ -44,7 +44,7 @@ class AtssMatcher(matcher.Matcher):
 
   def __init__(self,
                use_matmul_gather=False,
-               number_sample_per_level_per_anchor_on_loc=9):
+               number_sample_per_level_per_anchor_on_loc=[9, 9, 9, 9, 9, 9]):
     """Construct AtssMatcher.
 
     Args:
@@ -62,7 +62,7 @@ class AtssMatcher(matcher.Matcher):
     self._gather_op = tf.gather
     if use_matmul_gather:
         self._gather_op = ops.matmul_gather_on_zeroth_axis
-    self._number_sample_per_level_per_anchor_on_loc = number_sample_per_level_per_anchor_on_loc
+    self._number_sample_per_level_per_anchor_on_loc = number_sample_per_level_per_anchor_on_loc if number_sample_per_level_per_anchor_on_loc else [9]
 
 
   def _match(self, similarity_matrix, valid_rows, gt_boxes, anchors, anchor_level_indices, feature_map_spatial_dims, **kwargs):
@@ -116,10 +116,15 @@ class AtssMatcher(matcher.Matcher):
       candidate_indices_list = []
       begin_index = tf.cast(0, tf.int32)
       # pick k candidates from each level by minimum distance.
-      for number_anchors_per_level, spatial_size_per_level in zip(anchor_level_indices, feature_map_spatial_dims):
+      if len(anchor_level_indices) != len(self._number_sample_per_level_per_anchor_on_loc):
+        number_sample_per_level_per_anchor_on_loc_list = self._number_sample_per_level_per_anchor_on_loc[0] * len(anchor_level_indices)
+      else:
+        number_sample_per_level_per_anchor_on_loc_list = self._number_sample_per_level_per_anchor_on_loc
+
+      for number_anchors_per_level, spatial_size_per_level, number_sample_per_level_per_anchor_on_loc in zip(anchor_level_indices, feature_map_spatial_dims, number_sample_per_level_per_anchor_on_loc_list):
         last_index = begin_index + number_anchors_per_level
         distance_in_the_level = distance[begin_index:last_index, :]
-        k = tf.cast((number_anchors_per_level / (spatial_size_per_level[0] * spatial_size_per_level[1])) * self._number_sample_per_level_per_anchor_on_loc, tf.int32)
+        k = tf.cast((number_anchors_per_level / (spatial_size_per_level[0] * spatial_size_per_level[1])) * number_sample_per_level_per_anchor_on_loc, tf.int32)
         k = tf.math.minimum(tf.shape(distance_in_the_level)[0], k)  # todo k??
         print_op_list.append(tf.print("k ", k, "number_anchors_per_level ", number_anchors_per_level, summarize=-1))
         transpose = tf.transpose(distance_in_the_level, [1, 0])
@@ -209,6 +214,13 @@ class AtssMatcher(matcher.Matcher):
       print_op_list.append(tf.print("final_matches ", final_matches, summarize=-1))
 
       if DEBUG:
+        self.summarize(candidate_gathered_ious=candidate_gathered_ious,
+                       candidate_gathered_ious_mean=candidate_gathered_ious_mean,
+                       candidate_gathered_ious_std=candidate_gathered_ious_std,
+                       candidate_gathered_iou_pass_indices=candidate_gathered_iou_pass_indices,
+                       candidate_center_pass_indices=candidate_center_pass_indices,
+                       candidate_pass=candidate_pass)
+
         with tf.control_dependencies(print_op_list):
           final_matches = final_matches * 1
 
@@ -237,3 +249,51 @@ class AtssMatcher(matcher.Matcher):
     """
     indicator = tf.cast(indicator, x.dtype)
     return tf.add(tf.multiply(x, 1 - indicator), val * indicator)
+
+  def summarize(self, candidate_gathered_ious, candidate_gathered_ious_mean, candidate_gathered_ious_std,
+                candidate_gathered_iou_pass_indices, candidate_center_pass_indices, candidate_pass):
+
+    def summarize_batch_avg(value, name):
+      avg_value = tf.reduce_mean(tf.cast(value, dtype=tf.float32))
+      tf.summary.scalar('AtssMatcher/{}'.format(name), avg_value, family='TargetAssignment')
+
+    def summarize_max_std_sample(iou_value, mean_value, std_value):
+      iou_value = tf.cast(iou_value, dtype=tf.float32)
+      mean_value= tf.cast(mean_value, dtype=tf.float32)
+      std_value = tf.cast(std_value, dtype=tf.float32)
+
+      max_std_index = tf.argmax(std_value, axis=0)
+      iou_value_gathered = iou_value  # tf.gather(iou_value, max_std_index)
+      iou_value_gathered_min = tf.reduce_min(iou_value_gathered)
+      iou_value_greater_0 = tf.greater(iou_value_gathered, 0.01)
+      iou_value_greater_0_count = tf.reduce_sum(tf.cast(iou_value_greater_0, tf.int32))
+      mean_value_gathered = tf.gather(mean_value, max_std_index)
+      std_value_gathered = tf.gather(std_value, max_std_index)
+      tf.summary.scalar('AtssMatcher/{}'.format('gt_iou_min'), iou_value_gathered_min, family='TargetAssignment')
+      tf.summary.scalar('AtssMatcher/{}'.format('gt_iou_greater_0_count'), iou_value_greater_0_count, family='TargetAssignment')
+      tf.summary.scalar('AtssMatcher/{}'.format('max_std_gt_iou_mean'), mean_value_gathered, family='TargetAssignment')
+      tf.summary.scalar('AtssMatcher/{}'.format('max_std_gt_iou_std'), std_value_gathered, family='TargetAssignment')
+
+    shape = shape_utils.combined_static_and_dynamic_shape(candidate_gathered_ious)
+    gathered_count = shape[1]
+    gt_count = shape[0]
+    ## if gt box is padded to max_count (100) (unpad_groundtruth_tensors: false), the following avg value will be wrong.
+    tf.summary.scalar('AtssMatcher/{}'.format('GatheredIOUCount'), gathered_count, family='TargetAssignment')
+    tf.summary.scalar('AtssMatcher/{}'.format('GTCount'), gt_count, family='TargetAssignment')
+
+    summarize_batch_avg(candidate_gathered_ious_mean, 'GatheredIOUMeanAvgOnGT')
+    summarize_batch_avg(candidate_gathered_ious_std, 'GatheredIOUStdAvgOnGT')
+
+    candidate_gathered_iou_pass_count = tf.reduce_sum(tf.cast(candidate_gathered_iou_pass_indices, tf.int32), axis=-1)
+    summarize_batch_avg(candidate_gathered_iou_pass_count, 'GatheredIOUPassAvgOnGT')
+
+    candidate_center_pass_count = tf.reduce_sum(tf.cast(candidate_center_pass_indices, tf.int32), axis=-1)
+    summarize_batch_avg(candidate_center_pass_count, 'GatheredCenterPassAvgOnGT')
+
+    candidate_pass_count = tf.reduce_sum(tf.cast(candidate_pass, tf.int32), axis=-1)
+    summarize_batch_avg(candidate_pass_count, 'GatheredPassAvgOnGT')
+
+    summarize_max_std_sample(candidate_gathered_ious, candidate_gathered_ious_mean, candidate_gathered_ious_std)
+
+
+
