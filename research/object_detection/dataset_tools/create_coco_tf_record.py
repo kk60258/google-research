@@ -108,6 +108,9 @@ _DP_PART_ID_OFFSET = 1
 def clip_to_unit(x):
   return min(max(x, 0.0), 1.0)
 
+total_iscrowd = 0
+total_images = 0
+total_images_skipped = 0
 
 def create_tf_example(image,
                       annotations_list,
@@ -163,6 +166,7 @@ def create_tf_example(image,
   Raises:
     ValueError: if the image pointed to by data['filename'] is not a valid JPEG
   """
+  global total_iscrowd
   image_height = image['height']
   image_width = image['width']
   filename = image['file_name']
@@ -204,6 +208,10 @@ def create_tf_example(image,
   num_densepose_annotation_used = 0
   num_densepose_annotation_skipped = 0
   for object_annotations in annotations_list:
+    if object_annotations['iscrowd'] == 1:
+        total_iscrowd +=1
+        num_annotations_skipped += 1
+        continue
     (x, y, width, height) = tuple(object_annotations['bbox'])
     if width <= 0 or height <= 0:
       num_annotations_skipped += 1
@@ -385,6 +393,7 @@ def _create_tf_record_from_coco_annotations(annotations_file, image_dir,
     remove_non_person_images: Whether to remove any images that do not contain
       at least one "person" annotation.
   """
+  global total_images, total_images_skipped
   with contextlib2.ExitStack() as tf_record_close_stack, \
       tf.gfile.GFile(annotations_file, 'r') as fid:
     output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(
@@ -462,8 +471,17 @@ def _create_tf_record_from_coco_annotations(annotations_file, image_dir,
       shard_idx = idx % num_shards
       if tf_example:
         output_tfrecords[shard_idx].write(tf_example.SerializeToString())
+        total_images += 1
+      else:
+        total_images_skipped += 1
+
     logging.info('Finished writing, skipped %d annotations.',
                  total_num_annotations_skipped)
+    logging.info('total_iscrowd {}'.format(total_iscrowd))
+
+    logging.info('total_images {}'.format(total_images))
+    logging.info('total_images_skipped {}'.format(total_images_skipped))
+
     if keypoint_annotations_file:
       logging.info('Finished writing, skipped %d keypoint annotations.',
                    total_num_keypoint_annotations_skipped)
@@ -473,29 +491,29 @@ def _create_tf_record_from_coco_annotations(annotations_file, image_dir,
 
 
 def main(_):
-  assert FLAGS.train_image_dir, '`train_image_dir` missing.'
+  # assert FLAGS.train_image_dir, '`train_image_dir` missing.'
   assert FLAGS.val_image_dir, '`val_image_dir` missing.'
-  assert FLAGS.test_image_dir, '`test_image_dir` missing.'
-  assert FLAGS.train_annotations_file, '`train_annotations_file` missing.'
+  # assert FLAGS.test_image_dir, '`test_image_dir` missing.'
+  # assert FLAGS.train_annotations_file, '`train_annotations_file` missing.'
   assert FLAGS.val_annotations_file, '`val_annotations_file` missing.'
-  assert FLAGS.testdev_annotations_file, '`testdev_annotations_file` missing.'
+  # assert FLAGS.testdev_annotations_file, '`testdev_annotations_file` missing.'
 
   if not tf.gfile.IsDirectory(FLAGS.output_dir):
     tf.gfile.MakeDirs(FLAGS.output_dir)
-  train_output_path = os.path.join(FLAGS.output_dir, 'coco_train.record')
+  # train_output_path = os.path.join(FLAGS.output_dir, 'coco_train.record')
   val_output_path = os.path.join(FLAGS.output_dir, 'coco_val.record')
-  testdev_output_path = os.path.join(FLAGS.output_dir, 'coco_testdev.record')
+  # testdev_output_path = os.path.join(FLAGS.output_dir, 'coco_testdev.record')
 
-  _create_tf_record_from_coco_annotations(
-      FLAGS.train_annotations_file,
-      FLAGS.train_image_dir,
-      train_output_path,
-      FLAGS.include_masks,
-      num_shards=100,
-      keypoint_annotations_file=FLAGS.train_keypoint_annotations_file,
-      densepose_annotations_file=FLAGS.train_densepose_annotations_file,
-      remove_non_person_annotations=FLAGS.remove_non_person_annotations,
-      remove_non_person_images=FLAGS.remove_non_person_images)
+  # _create_tf_record_from_coco_annotations(
+  #     FLAGS.train_annotations_file,
+  #     FLAGS.train_image_dir,
+  #     train_output_path,
+  #     FLAGS.include_masks,
+  #     num_shards=100,
+  #     keypoint_annotations_file=FLAGS.train_keypoint_annotations_file,
+  #     densepose_annotations_file=FLAGS.train_densepose_annotations_file,
+  #     remove_non_person_annotations=FLAGS.remove_non_person_annotations,
+  #     remove_non_person_images=FLAGS.remove_non_person_images)
   _create_tf_record_from_coco_annotations(
       FLAGS.val_annotations_file,
       FLAGS.val_image_dir,
@@ -506,12 +524,12 @@ def main(_):
       densepose_annotations_file=FLAGS.val_densepose_annotations_file,
       remove_non_person_annotations=FLAGS.remove_non_person_annotations,
       remove_non_person_images=FLAGS.remove_non_person_images)
-  _create_tf_record_from_coco_annotations(
-      FLAGS.testdev_annotations_file,
-      FLAGS.test_image_dir,
-      testdev_output_path,
-      FLAGS.include_masks,
-      num_shards=50)
+  # _create_tf_record_from_coco_annotations(
+  #     FLAGS.testdev_annotations_file,
+  #     FLAGS.test_image_dir,
+  #     testdev_output_path,
+  #     FLAGS.include_masks,
+  #     num_shards=50)
 
 
 if __name__ == '__main__':
