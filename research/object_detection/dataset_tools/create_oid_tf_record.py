@@ -75,7 +75,7 @@ def main(_):
       raise ValueError('Flag --{} is required'.format(flag_name))
 
   label_map = label_map_util.get_label_map_dict(FLAGS.input_label_map)
-  all_box_annotations = pd.read_csv(FLAGS.input_box_annotations_csv)
+  all_box_annotations = pd.read_csv(FLAGS.input_box_annotations_csv, dtype={'ImageID': str})
   if FLAGS.input_image_label_annotations_csv:
     all_label_annotations = pd.read_csv(FLAGS.input_image_label_annotations_csv)
     all_label_annotations.rename(
@@ -95,15 +95,16 @@ def main(_):
     output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(
         tf_record_close_stack, FLAGS.output_tf_record_path_prefix,
         FLAGS.num_shards)
-
+    image_counter = 0
     for counter, image_data in enumerate(all_annotations.groupby('ImageID')):
-      tf.logging.log_every_n(tf.logging.INFO, 'Processed %d images...', 1000,
+      tf.logging.log_every_n(tf.logging.INFO, 'Processed %d images...', FLAGS.num_shards * 10,
                              counter)
 
       image_id, image_annotations = image_data
       # In OID image file names are formed by appending ".jpg" to the image ID.
       image_path = os.path.join(FLAGS.input_images_directory, image_id + '.jpg')
       if not os.path.exists(image_path):
+          print("image_path {} not exist".format(image_path))
           continue
 
       with tf.gfile.Open(image_path, 'rb') as image_file:
@@ -112,8 +113,15 @@ def main(_):
       tf_example = oid_tfrecord_creation.tf_example_from_annotations_data_frame(
           image_annotations, label_map, encoded_image)
       if tf_example:
-        shard_idx = int(image_id, 16) % FLAGS.num_shards
+        if FLAGS.num_shards == 1:
+            shard_idx = 0
+        else:
+            shard_idx = int(image_id, 16) % FLAGS.num_shards
         output_tfrecords[shard_idx].write(tf_example.SerializeToString())
+        image_counter += 1
+
+    print("tfrecord image counter {} ".format(image_counter))
+
 
 
 if __name__ == '__main__':
