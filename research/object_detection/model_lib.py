@@ -501,7 +501,7 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
 
     if mode == tf.estimator.ModeKeys.TRAIN:
       load_pretrained = hparams.load_pretrained if hparams else False
-      if train_config.fine_tune_checkpoint:
+      if train_config.fine_tune_checkpoint and os.path.exists(train_config.fine_tune_checkpoint):
         if not train_config.fine_tune_checkpoint_type:
           # train_config.from_detection_checkpoint field is deprecated. For
           # backward compatibility, set train_config.fine_tune_checkpoint_type
