@@ -370,7 +370,8 @@ class SSDMobileDetFeatureExtractorBase(ssd_meta_arch.SSDFeatureExtractor):
                use_explicit_padding=False,
                use_depthwise=False,
                override_base_feature_extractor_hyperparams=False,
-               scope_name='MobileDet'):
+               scope_name='MobileDet',
+               num_layers=6):
     """MobileDet Feature Extractor for SSD Models.
 
     Reference:
@@ -408,7 +409,8 @@ class SSDMobileDetFeatureExtractorBase(ssd_meta_arch.SSDFeatureExtractor):
         reuse_weights=reuse_weights,
         use_explicit_padding=use_explicit_padding,
         use_depthwise=use_depthwise,
-        override_base_feature_extractor_hyperparams=override_base_feature_extractor_hyperparams
+        override_base_feature_extractor_hyperparams=override_base_feature_extractor_hyperparams,
+        num_layers=num_layers
     )
     self._backbone_fn = backbone_fn
     self._scope_name = scope_name
@@ -446,10 +448,10 @@ class SSDMobileDetFeatureExtractorBase(ssd_meta_arch.SSDFeatureExtractor):
         preprocessed_inputs, self._pad_to_multiple)
 
     feature_map_layout = {
-        'from_layer': ['C4', 'C5', '', '', '', ''],
+        'from_layer': ['C4', 'C5', '', '', '', ''][:self._num_layers],
         # Do not specify the layer depths (number of filters) for C4 and C5, as
         # their values are determined based on the backbone.
-        'layer_depth': [-1, -1, 512, 256, 256, 128],
+        'layer_depth': [-1, -1, 512, 256, 256, 128][:self._num_layers],
         'use_depthwise': self._use_depthwise,
         'use_explicit_padding': self._use_explicit_padding,
     }
@@ -515,7 +517,8 @@ class SSDMobileDetDSPFeatureExtractor(SSDMobileDetFeatureExtractorBase):
                use_explicit_padding=False,
                use_depthwise=False,
                override_base_feature_extractor_hyperparams=False,
-               scope_name='MobileDetDSP'):
+               scope_name='MobileDetDSP',
+               num_layers=6):
     super(SSDMobileDetDSPFeatureExtractor, self).__init__(
         backbone_fn=mobiledet_dsp_backbone,
         is_training=is_training,
@@ -527,7 +530,8 @@ class SSDMobileDetDSPFeatureExtractor(SSDMobileDetFeatureExtractorBase):
         use_explicit_padding=use_explicit_padding,
         use_depthwise=use_depthwise,
         override_base_feature_extractor_hyperparams=override_base_feature_extractor_hyperparams,
-        scope_name=scope_name)
+        scope_name=scope_name,
+        num_layers=num_layers)
 
 class SSDMobileDetDSPFeatureExtractorBifpn(SSDMobileDetFeatureExtractorBase):
     """MobileDet-DSP feature extractor."""
