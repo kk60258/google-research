@@ -1,0 +1,15 @@
+item {
+  name: "/m/player"
+  id: 1
+  display_name: "player"
+}
+item {
+  name: "/m/staff"
+  id: 2
+  display_name: "staff"
+}
+item {
+  name: "/m/passenger"
+  id: 3
+  display_name: "passenger"
+}

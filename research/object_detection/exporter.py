@@ -315,10 +315,13 @@ def add_output_tensor_nodes(postprocessed_tensors,
   raw_boxes = postprocessed_tensors.get(detection_fields.raw_detection_boxes)
   raw_scores = postprocessed_tensors.get(detection_fields.raw_detection_scores)
   classes = postprocessed_tensors.get(
-      detection_fields.detection_classes) + label_id_offset
+      detection_fields.detection_classes, 0) + label_id_offset
   keypoints = postprocessed_tensors.get(detection_fields.detection_keypoints)
   masks = postprocessed_tensors.get(detection_fields.detection_masks)
   num_detections = postprocessed_tensors.get(detection_fields.num_detections)
+  sub_class_scores = postprocessed_tensors.get(fields.DetectionResultFields.detection_sub_class_scores)
+  anchor_indices = postprocessed_tensors.get(fields.DetectionResultFields.detection_anchor_indices)
+  raw_sub_scores = postprocessed_tensors.get(fields.DetectionResultFields.raw_sub_detection_scores)
   outputs = {}
   outputs[detection_fields.detection_boxes] = tf.identity(
       boxes, name=detection_fields.detection_boxes)
@@ -347,6 +350,15 @@ def add_output_tensor_nodes(postprocessed_tensors,
   if masks is not None:
     outputs[detection_fields.detection_masks] = tf.identity(
         masks, name=detection_fields.detection_masks)
+  if sub_class_scores is not None:
+    outputs[fields.DetectionResultFields.detection_sub_class_scores] = tf.identity(
+      sub_class_scores, name=fields.DetectionResultFields.detection_sub_class_scores)
+  if anchor_indices is not None:
+    outputs[fields.DetectionResultFields.detection_anchor_indices] = tf.identity(
+      anchor_indices, name=fields.DetectionResultFields.detection_anchor_indices)
+  if raw_sub_scores is not None:
+    outputs[fields.DetectionResultFields.raw_sub_detection_scores] = tf.identity(
+      raw_sub_scores, name=fields.DetectionResultFields.raw_sub_detection_scores)
   for output_key in outputs:
     tf.add_to_collection(output_collection_name, outputs[output_key])
 

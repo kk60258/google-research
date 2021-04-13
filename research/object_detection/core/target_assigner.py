@@ -171,6 +171,11 @@ class TargetAssigner(object):
     if unmatched_class_label is None:
       unmatched_class_label = tf.constant([0], tf.float32)
 
+    gt_sub_class = None
+    sub_cls_targets = None
+    if 'gt_sub_class' in kwargs:
+      gt_sub_class = kwargs['gt_sub_class']
+
     if groundtruth_labels is None:
       groundtruth_labels = tf.ones(tf.expand_dims(groundtruth_boxes.num_boxes(),
                                                   0))
@@ -211,6 +216,12 @@ class TargetAssigner(object):
       cls_targets = self._create_classification_targets(groundtruth_labels,
                                                         unmatched_class_label,
                                                         match)
+      if gt_sub_class is not None:
+        shape = shape_utils.combined_static_and_dynamic_shape(gt_sub_class)[-1:]
+        unmatched_sub_class_label = tf.constant(0, tf.float32, shape=shape)
+        sub_cls_targets = self._create_classification_targets(gt_sub_class,
+                                                              unmatched_sub_class_label,
+                                                            match)
       reg_weights = self._create_regression_weights(match, groundtruth_weights)
 
       cls_weights = self._create_classification_weights(match,
@@ -231,9 +242,11 @@ class TargetAssigner(object):
       cls_targets = self._reset_target_shape(cls_targets, num_anchors)
       reg_weights = self._reset_target_shape(reg_weights, num_anchors)
       cls_weights = self._reset_target_shape(cls_weights, num_anchors)
+      if sub_cls_targets is not None:
+        sub_cls_targets = self._reset_target_shape(sub_cls_targets, num_anchors)
 
     return (cls_targets, cls_weights, reg_targets, reg_weights,
-            match.match_results)
+            match.match_results, sub_cls_targets)
 
   def _reset_target_shape(self, target, num_anchors):
     """Sets the static shape of the target.
@@ -386,6 +399,9 @@ class TargetAssigner(object):
     """
     return self._box_coder
 
+  def get_gather_op(self):
+    return self._matcher.get_gather_op()
+
 
 # TODO(rathodv): This method pulls in all the implementation dependencies into
 # core. Therefore its best to have this factory method outside of core.
@@ -512,26 +528,41 @@ def batch_assign(target_assigner,
   reg_targets_list = []
   reg_weights_list = []
   match_list = []
+  sub_targets_list = []
+  if 'groundtruth_sub_classes_with_background_list' in kwargs:
+    gt_sub_class_targets_batch = kwargs['groundtruth_sub_classes_with_background_list']
+  else:
+    gt_sub_class_targets_batch = None
+
+  if not gt_sub_class_targets_batch:
+    gt_sub_class_targets_batch = [None] * len(gt_class_targets_batch)
+
   if gt_weights_batch is None:
     gt_weights_batch = [None] * len(gt_class_targets_batch)
-  for anchors, gt_boxes, gt_class_targets, gt_weights in zip(
-      anchors_batch, gt_box_batch, gt_class_targets_batch, gt_weights_batch):
+  for anchors, gt_boxes, gt_class_targets, gt_weights, gt_sub_class in zip(
+      anchors_batch, gt_box_batch, gt_class_targets_batch, gt_weights_batch, gt_sub_class_targets_batch):
     (cls_targets, cls_weights,
-     reg_targets, reg_weights, match) = target_assigner.assign(
+     reg_targets, reg_weights, match, sub_cls_targets) = target_assigner.assign(
          anchors, gt_boxes, gt_class_targets, unmatched_class_label,
-         gt_weights, **kwargs)
+         gt_weights, gt_sub_class=gt_sub_class, **kwargs)
     cls_targets_list.append(cls_targets)
     cls_weights_list.append(cls_weights)
     reg_targets_list.append(reg_targets)
     reg_weights_list.append(reg_weights)
     match_list.append(match)
+    if gt_sub_class is not None:
+      sub_targets_list.append(sub_cls_targets)
   batch_cls_targets = tf.stack(cls_targets_list)
   batch_cls_weights = tf.stack(cls_weights_list)
   batch_reg_targets = tf.stack(reg_targets_list)
   batch_reg_weights = tf.stack(reg_weights_list)
   batch_match = tf.stack(match_list)
+  if sub_targets_list:
+    batch_sub_targets = tf.stack(sub_targets_list)
+  else:
+    batch_sub_targets = None
   return (batch_cls_targets, batch_cls_weights, batch_reg_targets,
-          batch_reg_weights, batch_match)
+          batch_reg_weights, batch_match, batch_sub_targets)
 
 
 # Assign an alias to avoid large refactor of existing users.

@@ -46,10 +46,18 @@ def build(loss_config):
   """
   classification_loss = _build_classification_loss(
       loss_config.classification_loss)
+
+  if loss_config.HasField('sub_classification_loss'):
+    sub_classification_loss = _build_classification_loss(
+      loss_config.sub_classification_loss)
+  else:
+    sub_classification_loss = None
+
   localization_loss = _build_localization_loss(
       loss_config.localization_loss)
   classification_weight = loss_config.classification_weight
   localization_weight = loss_config.localization_weight
+  sub_classification_loss_weight = loss_config.sub_classification_weight
   hard_example_miner = None
   if loss_config.HasField('hard_example_miner'):
     if (loss_config.classification_loss.WhichOneof('classification_loss') ==
@@ -89,7 +97,7 @@ def build(loss_config):
 
   return (classification_loss, localization_loss, classification_weight,
           localization_weight, hard_example_miner, random_example_sampler,
-          expected_loss_weights_fn)
+          expected_loss_weights_fn, sub_classification_loss, sub_classification_loss_weight)
 
 
 def build_hard_example_miner(config,

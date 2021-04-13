@@ -268,3 +268,9 @@ class Matcher(six.with_metaclass(abc.ABCMeta, object)):
         match which one neither wants as positive nor negative example).
     """
     pass
+
+  def get_gather_op(self):
+    gather_op = tf.gather
+    if self._use_matmul_gather:
+      gather_op = ops.matmul_gather_on_zeroth_axis
+    return gather_op

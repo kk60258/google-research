@@ -1375,7 +1375,8 @@ def _strict_random_crop_image(image,
                               area_range=(0.1, 1.0),
                               overlap_thresh=0.3,
                               clip_boxes=True,
-                              preprocess_vars_cache=None):
+                              preprocess_vars_cache=None,
+                              sub_labels=None):
   """Performs random crop.
 
   Note: Keypoint coordinates that are outside the crop will be set to NaN, which
@@ -1515,6 +1516,9 @@ def _strict_random_crop_image(image,
     if multiclass_scores is not None:
       boxlist.add_field('multiclass_scores', multiclass_scores)
 
+    if sub_labels is not None:
+      boxlist.add_field('sub_labels', sub_labels)
+
     im_boxlist = box_list.BoxList(im_box_rank2)
 
     # remove boxes that are outside cropped image
@@ -1595,6 +1599,11 @@ def _strict_random_crop_image(image,
                 new_dp_num_points, new_dp_point_ids, new_dp_surf_coords,
                 window=[0.0, 0.0, 1.0, 1.0]))
       result.extend([new_dp_num_points, new_dp_point_ids, new_dp_surf_coords])
+
+    if sub_labels is not None:
+      new_sub_labels = overlapping_boxlist.get_field('sub_labels')
+      result.append(new_sub_labels)
+
     return tuple(result)
 
 
@@ -1617,7 +1626,8 @@ def random_crop_image(image,
                       clip_boxes=True,
                       random_coef=0.0,
                       seed=None,
-                      preprocess_vars_cache=None):
+                      preprocess_vars_cache=None,
+                      sub_labels=None):
   """Randomly crops the image.
 
   Given the input image and its bounding boxes, this op randomly
@@ -1732,7 +1742,8 @@ def random_crop_image(image,
         area_range=area_range,
         overlap_thresh=overlap_thresh,
         clip_boxes=clip_boxes,
-        preprocess_vars_cache=preprocess_vars_cache)
+        preprocess_vars_cache=preprocess_vars_cache,
+        sub_labels=sub_labels)
 
   # avoids tf.cond to make faster RCNN training on borg. See b/140057645.
   if random_coef < sys.float_info.min:
@@ -1761,6 +1772,8 @@ def random_crop_image(image,
     if densepose_num_points is not None:
       outputs.extend([densepose_num_points, densepose_part_ids,
                       densepose_surface_coords])
+    if sub_labels is not None:
+      outputs.append(sub_labels)
 
     result = tf.cond(do_a_crop_random, strict_random_crop_image_fn,
                      lambda: tuple(outputs))
@@ -3445,6 +3458,7 @@ def ssd_random_crop(image,
                     multiclass_scores=None,
                     masks=None,
                     keypoints=None,
+                    groundtruth_sub_classes=None,
                     min_object_covered=(0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0),
                     aspect_ratio_range=((0.5, 2.0),) * 7,
                     area_range=((0.1, 1.0),) * 7,
@@ -3518,7 +3532,7 @@ def ssd_random_crop(image,
 
     Args:
       selected_result: A tuple containing image, boxes, labels, keypoints (if
-                       not None), and masks (if not None).
+                       not None), groundtruth_sub_classes (if not None), and masks (if not None).
       index: The index that was randomly selected.
 
     Returns: A tuple containing image, boxes, labels, keypoints (if not None),
@@ -3532,6 +3546,7 @@ def ssd_random_crop(image,
     selected_multiclass_scores = None
     selected_masks = None
     selected_keypoints = None
+    sub_labels = None
     if label_weights is not None:
       selected_label_weights = selected_result[i]
       i += 1
@@ -3546,6 +3561,9 @@ def ssd_random_crop(image,
       i += 1
     if keypoints is not None:
       selected_keypoints = selected_result[i]
+      i += 1
+    if groundtruth_sub_classes is not None:
+      sub_labels = selected_result[i]
 
     return random_crop_image(
         image=image,
@@ -3563,12 +3581,13 @@ def ssd_random_crop(image,
         clip_boxes=clip_boxes[index],
         random_coef=random_coef[index],
         seed=seed,
-        preprocess_vars_cache=preprocess_vars_cache)
+        preprocess_vars_cache=preprocess_vars_cache,
+        sub_labels=sub_labels)
 
   result = _apply_with_random_selector_tuples(
       tuple(
           t for t in (image, boxes, labels, label_weights, label_confidences,
-                      multiclass_scores, masks, keypoints) if t is not None),
+                      multiclass_scores, masks, keypoints, groundtruth_sub_classes) if t is not None),
       random_crop_selector,
       num_cases=len(min_object_covered),
       preprocess_vars_cache=preprocess_vars_cache,
@@ -4321,7 +4340,8 @@ def get_default_func_arg_map(include_label_weights=True,
                              include_keypoints=False,
                              include_keypoint_visibilities=False,
                              include_dense_pose=False,
-                             include_keypoint_depths=False):
+                             include_keypoint_depths=False,
+                             include_sub_classes=False):
   """Returns the default mapping from a preprocessor function to its args.
 
   Args:
@@ -4355,6 +4375,11 @@ def get_default_func_arg_map(include_label_weights=True,
     groundtruth_label_confidences = (
         fields.InputDataFields.groundtruth_confidences)
 
+  groundtruth_sub_classes = None
+  if include_sub_classes:
+    groundtruth_sub_classes = (
+      fields.InputDataFields.groundtruth_sub_classes
+    )
   multiclass_scores = None
   if include_multiclass_scores:
     multiclass_scores = (fields.InputDataFields.multiclass_scores)
@@ -4528,7 +4553,7 @@ def get_default_func_arg_map(include_label_weights=True,
                         fields.InputDataFields.groundtruth_classes,
                         groundtruth_label_weights,
                         groundtruth_label_confidences, multiclass_scores,
-                        groundtruth_instance_masks, groundtruth_keypoints),
+                        groundtruth_instance_masks, groundtruth_keypoints, groundtruth_sub_classes),
       ssd_random_crop_pad: (fields.InputDataFields.image,
                             fields.InputDataFields.groundtruth_boxes,
                             fields.InputDataFields.groundtruth_classes,

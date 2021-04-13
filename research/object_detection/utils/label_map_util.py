@@ -31,7 +31,7 @@ from object_detection.protos import string_int_label_map_pb2
 _LABEL_OFFSET = 1
 
 
-def _validate_label_map(label_map):
+def _validate_label_map(label_map, allow_zero_id=False):
   """Checks if a label map is valid.
 
   Args:
@@ -43,7 +43,7 @@ def _validate_label_map(label_map):
   for item in label_map.item:
     if item.id < 0:
       raise ValueError('Label map ids should be >= 0.')
-    if (item.id == 0 and item.name != 'background' and
+    if (not allow_zero_id and item.id == 0 and item.name != 'background' and
         item.display_name != 'background'):
       raise ValueError('Label map id 0 is reserved for the background label')
 
@@ -156,7 +156,7 @@ def convert_label_map_to_categories(label_map,
   return categories
 
 
-def load_labelmap(path):
+def load_labelmap(path, allow_zero_id=False):
   """Loads label map proto.
 
   Args:
@@ -171,13 +171,14 @@ def load_labelmap(path):
       text_format.Merge(label_map_string, label_map)
     except text_format.ParseError:
       label_map.ParseFromString(label_map_string)
-  _validate_label_map(label_map)
+  _validate_label_map(label_map, allow_zero_id=allow_zero_id)
   return label_map
 
 
 def get_label_map_dict(label_map_path_or_proto,
                        use_display_name=False,
-                       fill_in_gaps_and_background=False):
+                       fill_in_gaps_and_background=False,
+                       allow_zero_id=False):
   """Reads a label map and returns a dictionary of label names to id.
 
   Args:
@@ -198,7 +199,7 @@ def get_label_map_dict(label_map_path_or_proto,
     negative values.
   """
   if isinstance(label_map_path_or_proto, string_types):
-    label_map = load_labelmap(label_map_path_or_proto)
+    label_map = load_labelmap(label_map_path_or_proto, allow_zero_id)
   else:
     _validate_label_map(label_map_path_or_proto)
     label_map = label_map_path_or_proto

@@ -317,7 +317,8 @@ class DetectionModel(six.with_metaclass(abc.ABCMeta, _BaseClass)):
       groundtruth_verified_neg_classes=None,
       groundtruth_not_exhaustive_classes=None,
       groundtruth_keypoint_depths_list=None,
-      groundtruth_keypoint_depth_weights_list=None):
+      groundtruth_keypoint_depth_weights_list=None,
+      groundtruth_sub_classes_list=None):
     """Provide groundtruth tensors.
 
     Args:
@@ -390,6 +391,9 @@ class DetectionModel(six.with_metaclass(abc.ABCMeta, _BaseClass)):
     self._groundtruth_lists[fields.BoxListFields.boxes] = groundtruth_boxes_list
     self._groundtruth_lists[
         fields.BoxListFields.classes] = groundtruth_classes_list
+    if groundtruth_sub_classes_list:
+      self._groundtruth_lists[
+        fields.BoxListFields.sub_classes] = groundtruth_sub_classes_list
     if groundtruth_weights_list:
       self._groundtruth_lists[fields.BoxListFields.
                               weights] = groundtruth_weights_list

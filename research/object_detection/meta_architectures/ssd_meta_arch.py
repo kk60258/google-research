@@ -286,7 +286,9 @@ class SSDMetaArch(model.DetectionModel):
                implicit_example_weight=0.5,
                equalization_loss_config=None,
                return_raw_detections_during_predict=False,
-               nms_on_host=True):
+               nms_on_host=True,
+               sub_classification_loss_weight=0,
+               sub_classification_loss = None):
     """SSDMetaArch Constructor.
 
     TODO(rathodv,jonathanhuang): group NMS parameters + score converter into
@@ -438,6 +440,9 @@ class SSDMetaArch(model.DetectionModel):
 
     self._return_raw_detections_during_predict = (
         return_raw_detections_during_predict)
+
+    self._sub_classification_loss = sub_classification_loss
+    self._sub_classification_loss_weight = sub_classification_loss_weight
 
   @property
   def feature_extractor(self):
@@ -768,6 +773,19 @@ class SSDMetaArch(model.DetectionModel):
             detection_keypoints, 'raw_keypoint_locations')
         additional_fields[fields.BoxListFields.keypoints] = detection_keypoints
 
+      if 'sub_class_predictions_with_background' in prediction_dict:
+        sub_class_predictions_with_background = (
+          prediction_dict['sub_class_predictions_with_background'])
+        raw_detection_sub_class_scores_with_background = self._score_conversion_fn(
+          sub_class_predictions_with_background)
+        raw_detection_sub_class_scores = tf.slice(raw_detection_sub_class_scores_with_background, [0, 0, 1], [-1, -1, -1])
+        # raw_detection_sub_class_scores = tf.identity(raw_detection_sub_class_scores,
+        #                                          'raw_box_sub_class_scores')
+        ## snpe test
+        # additional_fields.update({
+        #   fields.DetectionResultFields.detection_sub_class_scores: detection_sub_class_scores,
+        # })
+
       (nmsed_boxes, nmsed_scores, nmsed_classes, nmsed_masks,
        nmsed_additional_fields,
        num_detections) = self._non_max_suppression_fn(
@@ -790,7 +808,7 @@ class SSDMetaArch(model.DetectionModel):
           fields.DetectionResultFields.raw_detection_boxes:
               tf.squeeze(detection_boxes, axis=2),
           fields.DetectionResultFields.raw_detection_scores:
-              detection_scores_with_background
+              detection_scores_with_background,
       }
       if (nmsed_additional_fields is not None and
           fields.InputDataFields.multiclass_scores in nmsed_additional_fields):
@@ -811,6 +829,19 @@ class SSDMetaArch(model.DetectionModel):
       if nmsed_masks is not None:
         detection_dict[
             fields.DetectionResultFields.detection_masks] = nmsed_masks
+
+      # Depends on the final output format to
+      # use nmsed_anchor_indices to gather sub_class_scores or
+      # provide nmsed_anchor_indices and raw sub_class_score and gather detection_sub_class_scores when doing inference.
+      if nmsed_additional_fields is not None and 'anchor_indices' in nmsed_additional_fields\
+              and 'sub_class_predictions_with_background' in prediction_dict:
+        nmsed_anchor_indices = tf.cast(nmsed_additional_fields['anchor_indices'], dtype=tf.int32)
+        # gathered_scores = tf.gather(detection_sub_class_scores, nmsed_anchor_indices, axis=1, batch_dims=1)
+        # detection_dict[fields.DetectionResultFields.detection_sub_class_scores] = gathered_scores
+        ## tf.assert_equal(gathered_scores, nmsed_additional_fields[fields.DetectionResultFields.detection_sub_class_scores])
+        detection_dict[fields.DetectionResultFields.detection_anchor_indices] = nmsed_anchor_indices
+        detection_dict[fields.DetectionResultFields.raw_sub_detection_scores] = raw_detection_sub_class_scores
+
       return detection_dict
 
   def loss(self, prediction_dict, true_image_shapes, scope=None):
@@ -848,12 +879,31 @@ class SSDMetaArch(model.DetectionModel):
       confidences = None
       if self.groundtruth_has_field(fields.BoxListFields.confidences):
         confidences = self.groundtruth_lists(fields.BoxListFields.confidences)
+      if self.groundtruth_has_field(fields.BoxListFields.sub_classes):
+        groundtruth_sub_classes_list = self.groundtruth_lists(fields.BoxListFields.sub_classes)
+      else:
+        groundtruth_sub_classes_list = None
       (batch_cls_targets, batch_cls_weights, batch_reg_targets,
-       batch_reg_weights, batch_match) = self._assign_targets(
+       batch_reg_weights, batch_match, batch_sub_cls_targets) = self._assign_targets(
            self.groundtruth_lists(fields.BoxListFields.boxes),
            self.groundtruth_lists(fields.BoxListFields.classes),
-           keypoints, weights, confidences)
+           keypoints, weights, confidences, groundtruth_sub_classes_list)
       match_list = [matcher.Match(match) for match in tf.unstack(batch_match)]
+
+      # if self.groundtruth_has_field(fields.BoxListFields.sub_classes):
+      #   sub_groundtruth_labels_list = self.groundtruth_lists(fields.BoxListFields.sub_classes)
+      #   batch_sub_cls_targets = []
+      #   gather_op = self._target_assigner.get_gather_op()
+      #   for match, sub_groundtruth_labels in zip(match_list, sub_groundtruth_labels_list):
+      #     # handle unmatched result
+      #     # handle unmatched sub_label
+      #     # don't count sub classification loss if unmatched
+      #     sub_cls_targets = gather_op(sub_groundtruth_labels, match.match_results)
+      #     batch_sub_cls_targets.append(sub_cls_targets)
+      #
+      #   batch_sub_cls_targets = tf.stack(batch_sub_cls_targets)
+
+
       if self._add_summaries:
         self._summarize_target_assignment(
             self.groundtruth_lists(fields.BoxListFields.boxes), match_list)
@@ -900,6 +950,14 @@ class SSDMetaArch(model.DetectionModel):
           prediction_dict['class_predictions_with_background'],
           batch_cls_targets,
           weights=batch_cls_weights,
+          losses_mask=losses_mask)
+
+      sub_cls_losses = 0
+      if self._sub_classification_loss is not None:
+        sub_cls_losses = self._sub_classification_loss(
+          prediction_dict['sub_class_predictions_with_background'],
+          batch_sub_cls_targets,
+          weights=1,
           losses_mask=losses_mask)
 
       if self._expected_loss_weights_fn:
@@ -950,6 +1008,7 @@ class SSDMetaArch(model.DetectionModel):
         cls_losses = ops.reduce_sum_trailing_dimensions(cls_losses, ndims=2)
         localization_loss = tf.reduce_sum(location_losses)
         classification_loss = tf.reduce_sum(cls_losses)
+        sub_classification_loss = tf.reduce_sum(sub_cls_losses)
 
       # Optionally normalize by number of positive matches
       normalizer = tf.constant(1.0, dtype=tf.float32)
@@ -970,9 +1029,18 @@ class SSDMetaArch(model.DetectionModel):
                                         name='classification_loss')
 
       loss_dict = {
-          'Loss/localization_loss': localization_loss,
-          'Loss/classification_loss': classification_loss
+        'Loss/localization_loss': localization_loss,
+        'Loss/classification_loss': classification_loss,
       }
+
+      if self._sub_classification_loss is not None:
+        sub_classification_loss = tf.multiply((self._sub_classification_loss_weight /
+                                               normalizer), sub_classification_loss,
+                                              name='sub_classification_loss')
+
+        loss_dict.update({
+          'Loss/sub_classification_loss': sub_classification_loss,
+        })
 
 
     return loss_dict
@@ -1020,7 +1088,8 @@ class SSDMetaArch(model.DetectionModel):
                       groundtruth_classes_list,
                       groundtruth_keypoints_list=None,
                       groundtruth_weights_list=None,
-                      groundtruth_confidences_list=None):
+                      groundtruth_confidences_list=None,
+                      groundtruth_sub_classes_list=None):
     """Assign groundtruth targets.
 
     Adds a background class to each one-hot encoding of groundtruth classes
@@ -1064,11 +1133,21 @@ class SSDMetaArch(model.DetectionModel):
     ]
     train_using_confidences = (self._is_training and
                                self._use_confidences_as_targets)
+
+    groundtruth_sub_classes_with_background_list = None
+
     if self._add_background_class:
       groundtruth_classes_with_background_list = [
           tf.pad(one_hot_encoding, [[0, 0], [1, 0]], mode='CONSTANT')
           for one_hot_encoding in groundtruth_classes_list
       ]
+
+      if groundtruth_sub_classes_list:
+        groundtruth_sub_classes_with_background_list = [
+          tf.pad(one_hot_encoding, [[0, 0], [1, 0]], mode='CONSTANT')
+          for one_hot_encoding in groundtruth_sub_classes_list
+        ]
+
       if train_using_confidences:
         groundtruth_confidences_with_background_list = [
             tf.pad(groundtruth_confidences, [[0, 0], [1, 0]], mode='CONSTANT')
@@ -1076,6 +1155,8 @@ class SSDMetaArch(model.DetectionModel):
         ]
     else:
       groundtruth_classes_with_background_list = groundtruth_classes_list
+      if groundtruth_sub_classes_list:
+        groundtruth_sub_classes_with_background_list = groundtruth_sub_classes_list
 
     if groundtruth_keypoints_list is not None:
       for boxlist, keypoints in zip(
@@ -1100,7 +1181,8 @@ class SSDMetaArch(model.DetectionModel):
           self._unmatched_class_label,
           groundtruth_weights_list,
           anchor_level_indices=self._anchor_level_indices,
-          feature_map_spatial_dims=self._feature_map_spatial_dims)
+          feature_map_spatial_dims=self._feature_map_spatial_dims,
+          groundtruth_sub_classes_with_background_list=groundtruth_sub_classes_with_background_list)
 
   def _summarize_target_assignment(self, groundtruth_boxes_list, match_list):
     """Creates tensorflow summaries for the input boxes and anchors.

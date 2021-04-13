@@ -65,7 +65,8 @@ class _ClassTensorHandler(slim_example_decoder.Tensor):
                label_map_proto_file,
                shape_keys=None,
                shape=None,
-               default_value=''):
+               default_value='',
+               allow_zero_id=False):
     """Initializes the LookupTensor handler.
 
     Simply calls a vocabulary (most often, a label mapping) lookup.
@@ -86,7 +87,7 @@ class _ClassTensorHandler(slim_example_decoder.Tensor):
       ValueError: if both `shape_keys` and `shape` are specified.
     """
     name_to_id = label_map_util.get_label_map_dict(
-        label_map_proto_file, use_display_name=False)
+        label_map_proto_file, use_display_name=False, allow_zero_id=allow_zero_id)
     # We use a default_value of -1, but we expect all labels to be contained
     # in the label map.
     try:
@@ -102,7 +103,7 @@ class _ClassTensorHandler(slim_example_decoder.Tensor):
             values=tf.constant(list(name_to_id.values()), dtype=tf.int64)),
         default_value=-1)
     display_name_to_id = label_map_util.get_label_map_dict(
-        label_map_proto_file, use_display_name=True)
+        label_map_proto_file, use_display_name=True, allow_zero_id=allow_zero_id)
     # We use a default_value of -1, but we expect all labels to be contained
     # in the label map.
     display_name_to_id_table = hash_table_class(
@@ -140,7 +141,8 @@ class TfExampleDecoder(data_decoder.DataDecoder):
                expand_hierarchy_labels=False,
                load_dense_pose=False,
                load_track_id=False,
-               load_keypoint_depth_features=False):
+               load_keypoint_depth_features=False,
+               sub_label_map_proto_file=None):
     """Constructor sets keys_to_features and items_to_handlers.
 
     Args:
@@ -238,7 +240,10 @@ class TfExampleDecoder(data_decoder.DataDecoder):
             tf.VarLenFeature(tf.int64),
         'image/object/weight':
             tf.VarLenFeature(tf.float32),
-
+        'image/object/subclass/label':
+          tf.VarLenFeature(tf.int64),
+        'image/object/subclass/text':
+          tf.VarLenFeature(tf.string),
     }
     # We are checking `dct_method` instead of passing it directly in order to
     # ensure TF version 1.6 compatibility.
@@ -407,6 +412,7 @@ class TfExampleDecoder(data_decoder.DataDecoder):
           fields.InputDataFields.groundtruth_track_ids] = (
               slim_example_decoder.Tensor('image/object/track/label'))
 
+    load_sub_class_label = bool(sub_label_map_proto_file)
     if label_map_proto_file:
       # If the label_map_proto is provided, try to use it in conjunction with
       # the class text, and fall back to a materialized ID.
@@ -415,6 +421,13 @@ class TfExampleDecoder(data_decoder.DataDecoder):
               'image/object/class/text', label_map_proto_file,
               default_value=''),
           slim_example_decoder.Tensor('image/object/class/label'))
+      if load_sub_class_label:
+        sub_label_handler = slim_example_decoder.BackupHandler(
+          _ClassTensorHandler(
+            'image/object/subclass/text', sub_label_map_proto_file,
+            default_value='', allow_zero_id=True),
+          slim_example_decoder.Tensor('image/object/subclass/label'))
+
       image_label_handler = slim_example_decoder.BackupHandler(
           _ClassTensorHandler(
               fields.TfExampleFields.image_class_text,
@@ -423,10 +436,15 @@ class TfExampleDecoder(data_decoder.DataDecoder):
           slim_example_decoder.Tensor(fields.TfExampleFields.image_class_label))
     else:
       label_handler = slim_example_decoder.Tensor('image/object/class/label')
+      if load_sub_class_label:
+        sub_label_handler = slim_example_decoder.Tensor('image/object/subclass/label')
       image_label_handler = slim_example_decoder.Tensor(
           fields.TfExampleFields.image_class_label)
     self.items_to_handlers[
         fields.InputDataFields.groundtruth_classes] = label_handler
+    if load_sub_class_label:
+      self.items_to_handlers[
+        fields.InputDataFields.groundtruth_sub_classes] = sub_label_handler
     self.items_to_handlers[
         fields.InputDataFields.groundtruth_image_classes] = image_label_handler
 

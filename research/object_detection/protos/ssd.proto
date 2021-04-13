@@ -14,7 +14,7 @@ import "object_detection/protos/region_similarity_calculator.proto";
 import "object_detection/protos/fpn.proto";
 
 // Configuration for Single Shot Detection (SSD) models.
-// Next id: 27
+// Next id: 28
 message Ssd {
   // Number of classes to predict.
   optional int32 num_classes = 1;
@@ -144,6 +144,7 @@ message Ssd {
 
   // Configs for mask head.
   optional MaskHead mask_head_config = 25;
+  optional int32 num_sub_classes = 27;
 }
 
 // Next id: 20.

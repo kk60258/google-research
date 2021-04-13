@@ -150,6 +150,7 @@ def transform_input_data(tensor_dict,
                          model_preprocess_fn,
                          image_resizer_fn,
                          num_classes,
+                         num_sub_classes=0,
                          data_augmentation_fn=None,
                          merge_multiple_boxes=False,
                          retain_original_image=False,
@@ -222,6 +223,7 @@ def transform_input_data(tensor_dict,
   image_classes_field = input_fields.groundtruth_image_classes
   verified_neg_classes_field = input_fields.groundtruth_verified_neg_classes
   not_exhaustive_field = input_fields.groundtruth_not_exhaustive_classes
+  sub_classes_field = input_fields.groundtruth_sub_classes
 
   if (labeled_classes_field in out_tensor_dict and
       image_classes_field in out_tensor_dict):
@@ -357,6 +359,12 @@ def transform_input_data(tensor_dict,
         zero_indexed_groundtruth_classes, num_classes)
   out_tensor_dict.pop(input_fields.multiclass_scores, None)
 
+  if input_fields.groundtruth_sub_classes in out_tensor_dict:
+    zero_indexed_groundtruth_sub_classes = out_tensor_dict[
+                                         input_fields.groundtruth_sub_classes] - _LABEL_OFFSET
+    out_tensor_dict[input_fields.groundtruth_sub_classes] = tf.one_hot(
+      zero_indexed_groundtruth_sub_classes, num_sub_classes)
+
   if input_fields.groundtruth_confidences in out_tensor_dict:
     groundtruth_confidences = out_tensor_dict[
         input_fields.groundtruth_confidences]
@@ -392,6 +400,7 @@ def transform_input_data(tensor_dict,
 def pad_input_data_to_static_shapes(tensor_dict,
                                     max_num_boxes,
                                     num_classes,
+                                    num_sub_classes=0,
                                     spatial_image_shape=None,
                                     max_num_context_features=None,
                                     context_feature_length=None,
@@ -568,6 +577,9 @@ def pad_input_data_to_static_shapes(tensor_dict,
   if input_fields.is_annotated in tensor_dict:
     padding_shapes[input_fields.is_annotated] = []
 
+  if input_fields.groundtruth_sub_classes in tensor_dict:
+    padding_shapes[input_fields.groundtruth_sub_classes] = [max_num_boxes, num_sub_classes]
+
   padded_tensor_dict = {}
   for tensor_name in tensor_dict:
     padded_tensor_dict[tensor_name] = shape_utils.pad_or_clip_nd(
@@ -617,6 +629,7 @@ def augment_input_data(tensor_dict, data_augmentation_options):
                        fields.InputDataFields.groundtruth_dp_part_ids,
                        fields.InputDataFields.groundtruth_dp_surface_coords]
   include_dense_pose = all(field in tensor_dict for field in dense_pose_fields)
+  include_sub_classes= (fields.InputDataFields.groundtruth_sub_classes in tensor_dict)
   tensor_dict = preprocessor.preprocess(
       tensor_dict, data_augmentation_options,
       func_arg_map=preprocessor.get_default_func_arg_map(
@@ -627,7 +640,8 @@ def augment_input_data(tensor_dict, data_augmentation_options):
           include_keypoints=include_keypoints,
           include_keypoint_visibilities=include_keypoint_visibilities,
           include_dense_pose=include_dense_pose,
-          include_keypoint_depths=include_keypoint_depths))
+          include_keypoint_depths=include_keypoint_depths,
+          include_sub_classes=include_sub_classes))
   tensor_dict[fields.InputDataFields.image] = tf.squeeze(
       tensor_dict[fields.InputDataFields.image], axis=0)
   return tensor_dict
@@ -663,7 +677,8 @@ def _get_labels_dict(input_dict):
       fields.InputDataFields.groundtruth_dp_surface_coords,
       fields.InputDataFields.groundtruth_track_ids,
       fields.InputDataFields.groundtruth_verified_neg_classes,
-      fields.InputDataFields.groundtruth_not_exhaustive_classes
+      fields.InputDataFields.groundtruth_not_exhaustive_classes,
+      fields.InputDataFields.groundtruth_sub_classes,
   ]
 
   for key in optional_label_keys:
@@ -850,6 +865,7 @@ def train_input(train_config, train_input_config,
     model_preprocess_fn = model.preprocess
 
   num_classes = config_util.get_number_of_classes(model_config)
+  num_sub_classes = config_util.get_number_of_sub_classes(model_config)
 
   def transform_and_pad_input_data_fn(tensor_dict):
     """Combines transform and pad operation."""
@@ -868,6 +884,7 @@ def train_input(train_config, train_input_config,
         transform_input_data, model_preprocess_fn=model_preprocess_fn,
         image_resizer_fn=image_resizer_fn,
         num_classes=num_classes,
+        num_sub_classes=num_sub_classes,
         data_augmentation_fn=data_augmentation_fn,
         merge_multiple_boxes=train_config.merge_multiple_label_boxes,
         retain_original_image=train_config.retain_original_images,
@@ -879,6 +896,7 @@ def train_input(train_config, train_input_config,
         tensor_dict=transform_data_fn(tensor_dict),
         max_num_boxes=train_input_config.max_number_of_boxes,
         num_classes=num_classes,
+        num_sub_classes=num_sub_classes,
         spatial_image_shape=config_util.get_spatial_image_size(
             image_resizer_config),
         max_num_context_features=config_util.get_max_num_context_features(
@@ -1018,6 +1036,7 @@ def eval_input(eval_config, eval_input_config, model_config,
   def transform_and_pad_input_data_fn(tensor_dict):
     """Combines transform and pad operation."""
     num_classes = config_util.get_number_of_classes(model_config)
+    num_sub_classes = config_util.get_number_of_sub_classes(model_config)
 
     image_resizer_config = config_util.get_image_resizer_config(model_config)
     image_resizer_fn = image_resizer_builder.build(image_resizer_config)
@@ -1027,6 +1046,7 @@ def eval_input(eval_config, eval_input_config, model_config,
         transform_input_data, model_preprocess_fn=model_preprocess_fn,
         image_resizer_fn=image_resizer_fn,
         num_classes=num_classes,
+        num_sub_classes=num_sub_classes,
         data_augmentation_fn=None,
         retain_original_image=eval_config.retain_original_images,
         retain_original_image_additional_channels=
@@ -1036,6 +1056,7 @@ def eval_input(eval_config, eval_input_config, model_config,
         tensor_dict=transform_data_fn(tensor_dict),
         max_num_boxes=eval_input_config.max_number_of_boxes,
         num_classes=config_util.get_number_of_classes(model_config),
+        num_sub_classes=num_sub_classes,
         spatial_image_shape=config_util.get_spatial_image_size(
             image_resizer_config),
         max_num_context_features=config_util.get_max_num_context_features(
@@ -1085,6 +1106,7 @@ def create_predict_input_fn(model_config, predict_input_config):
     example = tf.placeholder(dtype=tf.string, shape=[], name='tf_example')
 
     num_classes = config_util.get_number_of_classes(model_config)
+    num_sub_classes = config_util.get_number_of_classes(model_config)
     model_preprocess_fn = INPUT_BUILDER_UTIL_MAP['model_build'](
         model_config, is_training=False).preprocess
 
@@ -1095,6 +1117,7 @@ def create_predict_input_fn(model_config, predict_input_config):
         transform_input_data, model_preprocess_fn=model_preprocess_fn,
         image_resizer_fn=image_resizer_fn,
         num_classes=num_classes,
+        num_sub_classes=num_sub_classes,
         data_augmentation_fn=None)
 
     decoder = tf_example_decoder.TfExampleDecoder(

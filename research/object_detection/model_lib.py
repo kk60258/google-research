@@ -215,6 +215,10 @@ def _prepare_groundtruth_for_eval(detection_model, class_agnostic,
                 input_data_fields.groundtruth_labeled_classes)),
         label_id_offset_paddings)
 
+  if detection_model.groundtruth_has_field(fields.BoxListFields.sub_classes):
+    groundtruth[input_data_fields.groundtruth_sub_classes] = tf.argmax(
+      detection_model.groundtruth_lists(fields.BoxListFields.sub_classes), axis=-1)
+
   groundtruth[input_data_fields.num_groundtruth_boxes] = (
       tf.tile([max_number_of_boxes], multiples=[groundtruth_boxes_shape[0]]))
   return groundtruth
@@ -377,6 +381,9 @@ def provide_groundtruth(model, labels):
   if fields.InputDataFields.groundtruth_not_exhaustive_classes in labels:
     gt_not_exhaustive_classes = labels[
         fields.InputDataFields.groundtruth_not_exhaustive_classes]
+  gt_sub_classes_list = None
+  if fields.InputDataFields.groundtruth_sub_classes in labels:
+    gt_sub_classes_list = labels[fields.InputDataFields.groundtruth_sub_classes]
   model.provide_groundtruth(
       groundtruth_boxes_list=gt_boxes_list,
       groundtruth_classes_list=gt_classes_list,
@@ -396,7 +403,8 @@ def provide_groundtruth(model, labels):
       groundtruth_verified_neg_classes=gt_verified_neg_classes,
       groundtruth_not_exhaustive_classes=gt_not_exhaustive_classes,
       groundtruth_keypoint_depths_list=gt_keypoint_depths_list,
-      groundtruth_keypoint_depth_weights_list=gt_keypoint_depth_weights_list)
+      groundtruth_keypoint_depth_weights_list=gt_keypoint_depth_weights_list,
+      groundtruth_sub_classes_list=gt_sub_classes_list)
 
 
 def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
@@ -662,7 +670,7 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
             keypoint_edges=keypoint_edges or None)
         vis_metric_ops = eval_metric_op_vis.get_estimator_eval_metric_ops(
             eval_dict)
-
+      # not eval sub_classes yet
       # Eval metrics on a single example.
       eval_metric_ops = eval_util.get_eval_metric_ops_for_evaluators(
           eval_config, list(category_index.values()), eval_dict)

@@ -334,6 +334,22 @@ def get_number_of_classes(model_config):
   else:
     raise ValueError("{} does not have num_classes.".format(meta_architecture))
 
+def get_number_of_sub_classes(model_config):
+  """Returns the number of classes for a detection model.
+
+  Args:
+    model_config: A model_pb2.DetectionModel.
+
+  Returns:
+    Number of classes or 0.
+  """
+  meta_architecture = model_config.WhichOneof("model")
+  meta_architecture_config = getattr(model_config, meta_architecture)
+
+  if hasattr(meta_architecture_config, "num_sub_classes"):
+    return meta_architecture_config.num_sub_classes
+  else:
+    return 0
 
 def get_optimizer_type(train_config):
   """Returns the optimizer type for training.

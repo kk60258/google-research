@@ -5,6 +5,7 @@ package object_detection.protos;
 // Message for configuring the localization loss, classification loss and hard
 // example miner used for training object detection models. See core/losses.py
 // for details
+// next id 23
 message Loss {
   // Localization loss to use.
   optional LocalizationLoss localization_loss = 1;
@@ -61,6 +62,11 @@ message Loss {
   // Only applies if expected_loss_weights is not NONE.
   // TODO(birdbrain): Move under ExpectedLossWeights.
   optional float desired_negative_sampling_ratio = 20 [default=3];
+
+  // Sub classification loss to use.
+  optional ClassificationLoss sub_classification_loss = 21;
+  // Sub classification loss weight.
+  optional float sub_classification_weight = 22 [default=0.0];
 }
 
 // Configuration for bounding box localization loss function.

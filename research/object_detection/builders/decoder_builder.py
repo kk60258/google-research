@@ -62,7 +62,8 @@ def build(input_reader_config):
           load_dense_pose=input_reader_config.load_dense_pose,
           load_track_id=input_reader_config.load_track_id,
           load_keypoint_depth_features=input_reader_config
-          .load_keypoint_depth_features)
+          .load_keypoint_depth_features,
+        sub_label_map_proto_file=input_reader_config.sub_label_map_path)
       return decoder
     elif input_type == input_reader_pb2.InputType.Value('TF_SEQUENCE_EXAMPLE'):
       decoder = tf_sequence_example_decoder.TfSequenceExampleDecoder(

@@ -110,6 +110,7 @@ class InputDataFields(object):
   groundtruth_labeled_classes = 'groundtruth_labeled_classes'
   groundtruth_boxes = 'groundtruth_boxes'
   groundtruth_classes = 'groundtruth_classes'
+  groundtruth_sub_classes = 'groundtruth_sub_classes'
   groundtruth_track_ids = 'groundtruth_track_ids'
   groundtruth_temporal_offset = 'groundtruth_temporal_offset'
   groundtruth_track_match_flags = 'groundtruth_track_match_flags'
@@ -181,6 +182,7 @@ class DetectionResultFields(object):
   key = 'key'
   detection_boxes = 'detection_boxes'
   detection_scores = 'detection_scores'
+  detection_sub_class_scores = 'detection_sub_class_scores'
   detection_multiclass_scores = 'detection_multiclass_scores'
   detection_features = 'detection_features'
   detection_classes = 'detection_classes'
@@ -195,6 +197,7 @@ class DetectionResultFields(object):
   num_detections = 'num_detections'
   raw_detection_boxes = 'raw_detection_boxes'
   raw_detection_scores = 'raw_detection_scores'
+  raw_sub_detection_scores = 'raw_sub_detection_scores'
   detection_anchor_indices = 'detection_anchor_indices'
 
 
@@ -221,8 +224,10 @@ class BoxListFields(object):
     temporal_offsets: temporal center offsets per bounding box.
     track_match_flags: match flags per bounding box.
   """
+  anchor_indices = 'anchor_indices'
   boxes = 'boxes'
   classes = 'classes'
+  sub_classes = 'sub_classes'
   scores = 'scores'
   weights = 'weights'
   confidences = 'confidences'
@@ -317,6 +322,8 @@ class TfExampleFields(object):
   image_class_confidence = 'image/class/confidence'
   object_class_text = 'image/object/class/text'
   object_class_label = 'image/object/class/label'
+  object_sub_class_text = 'image/object/subclass/text'
+  object_sub_class_label = 'image/object/subclass/label'
   object_bbox_ymin = 'image/object/bbox/ymin'
   object_bbox_xmin = 'image/object/bbox/xmin'
   object_bbox_ymax = 'image/object/bbox/ymax'

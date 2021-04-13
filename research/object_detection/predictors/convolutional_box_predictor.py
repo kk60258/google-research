@@ -103,6 +103,10 @@ class ConvolutionalBoxPredictor(box_predictor.BoxPredictor):
   def num_classes(self):
     return self._num_classes
 
+  @property
+  def num_sub_classes(self):
+    return self._num_sub_classes
+
   def _predict(self, image_features, num_predictions_per_location_list):
     """Computes encoded object locations and corresponding confidences.
 
