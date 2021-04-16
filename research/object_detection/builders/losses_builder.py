@@ -251,7 +251,9 @@ def _build_classification_loss(loss_config):
       alpha = config.alpha
     return losses.SigmoidFocalClassificationLoss(
         gamma=config.gamma,
-        alpha=alpha)
+        alpha=alpha,
+        include_untargeted=config.include_untargeted)
+
   elif loss_type == 'weighted_softmax_focal':
     config = loss_config.weighted_softmax_focal
     alpha = None

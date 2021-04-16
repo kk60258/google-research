@@ -148,6 +148,8 @@ message SigmoidFocalClassificationLoss {
   optional float gamma = 2 [default = 2.0];
   // alpha weighting factor for the loss.
   optional float alpha = 3;
+  // also classify tensor with mapping to untargeted label
+  optional bool include_untargeted = 4 [default = true];
 }
 
 // Follow sigmoid focal loss but use softmax as the probability p

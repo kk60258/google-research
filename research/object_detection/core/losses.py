@@ -436,7 +436,7 @@ class SigmoidFocalClassificationLoss(Loss):
   examples. See https://arxiv.org/pdf/1708.02002.pdf for the loss definition.
   """
 
-  def __init__(self, gamma=2.0, alpha=0.25):
+  def __init__(self, gamma=2.0, alpha=0.25, include_untargeted=True):
     """Constructor.
 
     Args:
@@ -446,6 +446,7 @@ class SigmoidFocalClassificationLoss(Loss):
     super(SigmoidFocalClassificationLoss, self).__init__()
     self._alpha = alpha
     self._gamma = gamma
+    self._include_untargeted = include_untargeted
 
   def _compute_loss(self,
                     prediction_tensor,
@@ -474,18 +475,34 @@ class SigmoidFocalClassificationLoss(Loss):
           ops.indices_to_dense_vector(class_indices,
                                       tf.shape(prediction_tensor)[2]),
           [1, 1, -1])
-    per_entry_cross_ent = (tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=target_tensor, logits=prediction_tensor))
-    prediction_probabilities = tf.sigmoid(prediction_tensor)
-    p_t = ((target_tensor * prediction_probabilities) +
-           ((1 - target_tensor) * (1 - prediction_probabilities)))
+    if self._include_untargeted:
+      per_entry_cross_ent = (tf.nn.sigmoid_cross_entropy_with_logits(
+          labels=target_tensor, logits=prediction_tensor))
+
+      prediction_probabilities = tf.sigmoid(prediction_tensor)
+    else:
+      sigmoid_logits = tf.sigmoid(prediction_tensor)
+      per_entry_cross_ent = target_tensor * -tf.math.log(sigmoid_logits)
+
+      prediction_probabilities = sigmoid_logits
+
+    if self._include_untargeted:
+      p_t = ((target_tensor * prediction_probabilities) +
+             ((1 - target_tensor) * (1 - prediction_probabilities)))
+    else:
+      p_t = prediction_probabilities
+
     modulating_factor = 1.0
     if self._gamma:
       modulating_factor = tf.pow(1.0 - p_t, self._gamma)
     alpha_weight_factor = 1.0
     if self._alpha is not None:
-      alpha_weight_factor = (target_tensor * self._alpha +
-                             (1 - target_tensor) * (1 - self._alpha))
+      if self._include_untargeted:
+        alpha_weight_factor = (target_tensor * self._alpha +
+                               (1 - target_tensor) * (1 - self._alpha))
+      else:
+        alpha_weight_factor = self._alpha
+
     focal_cross_entropy_loss = (modulating_factor * alpha_weight_factor *
                                 per_entry_cross_ent)
     return focal_cross_entropy_loss * weights
