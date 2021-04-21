@@ -561,6 +561,9 @@ class TfExampleDecoder(data_decoder.DataDecoder):
           tensor_dict[gt_kpt_fld],
           np.nan * tf.ones_like(tensor_dict[gt_kpt_fld]))
 
+    if fields.InputDataFields.groundtruth_boxes in tensor_dict:
+      tensor_dict[fields.InputDataFields.groundtruth_boxes] = tf.clip_by_value(tensor_dict[fields.InputDataFields.groundtruth_boxes], 0.0, 1.0)
+
     if self._expand_hierarchy_labels:
       input_fields = fields.InputDataFields
       image_classes, image_confidences = self._expand_image_label_hierarchy(
@@ -578,6 +581,8 @@ class TfExampleDecoder(data_decoder.DataDecoder):
           fields.InputDataFields.groundtruth_boxes,
           fields.InputDataFields.groundtruth_weights,
       ]
+
+
 
       def expand_field(field_name):
         return self._expansion_box_field_labels(
