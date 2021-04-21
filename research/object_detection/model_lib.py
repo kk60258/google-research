@@ -561,6 +561,10 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
         total_loss = tf.add_n(losses, name='total_loss')
         losses_dict['Loss/total_loss'] = total_loss
 
+      if mode == tf.estimator.ModeKeys.TRAIN:  # eval mode will take summaries in eval_metric_ops
+        for key, value in losses_dict.items():
+          tf.summary.scalar(key, value)
+
       if 'graph_rewriter_config' in configs:
         graph_rewriter_fn = graph_rewriter_builder.build(
             configs['graph_rewriter_config'], is_training=is_training)
