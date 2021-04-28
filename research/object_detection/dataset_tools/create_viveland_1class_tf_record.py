@@ -22,9 +22,7 @@ Example usage:
     --input_label_map=/path/to/input/labels_bbox_545.labelmap \
     --output_tf_record_path_prefix=/path/to/output/prefix.tfrecord
 
-
 viveland label is in oid format.
-
 """
 from __future__ import absolute_import
 from __future__ import division
@@ -36,7 +34,7 @@ import contextlib2
 import pandas as pd
 import tensorflow.compat.v1 as tf
 
-from object_detection.dataset_tools import viveland_tfrecord_creation
+from object_detection.dataset_tools import oid_tfrecord_creation
 from object_detection.dataset_tools import tf_record_creation_util
 from object_detection.utils import label_map_util
 
@@ -48,7 +46,6 @@ tf.flags.DEFINE_string('input_images_directory', None,
 tf.flags.DEFINE_string('input_image_label_annotations_csv', None,
                        'Path to CSV containing image-level labels annotations')
 tf.flags.DEFINE_string('input_label_map', None, 'Path to the label map proto')
-tf.flags.DEFINE_string('input_sub_label_map', None, 'Path to the sub label map proto')
 tf.flags.DEFINE_string(
     'output_tf_record_path_prefix', None,
     'Path to the output TFRecord. The shard index and the number of shards '
@@ -70,7 +67,6 @@ def main(_):
       raise ValueError('Flag --{} is required'.format(flag_name))
 
   label_map = label_map_util.get_label_map_dict(FLAGS.input_label_map)
-  sub_label_map = label_map_util.get_label_map_dict(FLAGS.input_sub_label_map, allow_zero_id=True)
   all_box_annotations = pd.read_csv(FLAGS.input_box_annotations_csv, dtype={'ImageID': str})
   if FLAGS.input_image_label_annotations_csv:
     all_label_annotations = pd.read_csv(FLAGS.input_image_label_annotations_csv)
@@ -106,14 +102,13 @@ def main(_):
       with tf.gfile.Open(image_path, 'rb') as image_file:
         encoded_image = image_file.read()
 
-      tf_example = viveland_tfrecord_creation.tf_example_from_annotations_data_frame(
-          image_annotations, label_map, sub_label_map, encoded_image)
+      tf_example = oid_tfrecord_creation.tf_example_from_annotations_data_frame(
+          image_annotations, label_map, encoded_image)
       if tf_example:
         if FLAGS.num_shards == 1:
             shard_idx = 0
         else:
-            image_id_num = sum([ord(x) for x in image_id])
-            shard_idx = image_id_num % FLAGS.num_shards
+            shard_idx = int(image_id, 16) % FLAGS.num_shards
         output_tfrecords[shard_idx].write(tf_example.SerializeToString())
         image_counter += 1
 

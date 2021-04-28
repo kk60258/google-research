@@ -9,7 +9,7 @@ item {
   display_name: "staff"
 }
 item {
-  name: "/m/passenger"
+  name: "/m/guest"
   id: 3
-  display_name: "passenger"
+  display_name: "guest"
 }
