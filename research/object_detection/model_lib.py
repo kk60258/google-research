@@ -39,6 +39,7 @@ from object_detection.utils import ops
 from object_detection.utils import shape_utils
 from object_detection.utils import variables_helper
 from object_detection.utils import visualization_utils as vis_utils
+import glob
 
 # pylint: disable=g-import-not-at-top
 try:
@@ -509,7 +510,9 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
 
     if mode == tf.estimator.ModeKeys.TRAIN:
       load_pretrained = hparams.load_pretrained if hparams else False
-      if train_config.fine_tune_checkpoint and os.path.exists(train_config.fine_tune_checkpoint):
+      ckpt = glob.glob(train_config.fine_tune_checkpoint+'*')
+      if train_config.fine_tune_checkpoint and ckpt:
+        tf.logging.warning('!!!!!!!!  restore  !!!!!!!!!')
         if not train_config.fine_tune_checkpoint_type:
           # train_config.from_detection_checkpoint field is deprecated. For
           # backward compatibility, set train_config.fine_tune_checkpoint_type
@@ -538,6 +541,8 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
         else:
           tf.train.init_from_checkpoint(train_config.fine_tune_checkpoint,
                                         available_var_map)
+      else:
+        tf.logging.warning('!!!!!!!!  not restore  !!!!!!!!!')
 
     if mode in (tf.estimator.ModeKeys.TRAIN, tf.estimator.ModeKeys.EVAL):
       if (mode == tf.estimator.ModeKeys.EVAL and
