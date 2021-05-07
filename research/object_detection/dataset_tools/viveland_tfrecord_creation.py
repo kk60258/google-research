@@ -52,7 +52,8 @@ def tf_example_from_annotations_data_frame(annotations_data_frame, label_map,
       filtered_data_frame.YMin.isnull()]
   image_id = annotations_data_frame.ImageID.iloc[0]
 
-  print("image_id {} shape {}".format(image_id, filtered_data_frame_boxes.YMin.to_numpy().shape))
+  bbox_count = len(filtered_data_frame_boxes.YMin.to_numpy())
+  print("image_id {} shape {}, count {}".format(image_id, filtered_data_frame_boxes.YMin.to_numpy().shape, bbox_count))
   feature_map = {
       standard_fields.TfExampleFields.object_bbox_ymin:
           dataset_util.float_list_feature(
@@ -123,4 +124,4 @@ def tf_example_from_annotations_data_frame(annotations_data_frame, label_map,
                     six.ensure_binary(label_text) for label_text in
                     filtered_data_frame_labels.Class1.to_numpy()
                 ]),
-  return tf.train.Example(features=tf.train.Features(feature=feature_map))
+  return tf.train.Example(features=tf.train.Features(feature=feature_map)), bbox_count

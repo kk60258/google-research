@@ -92,6 +92,7 @@ def main(_):
         tf_record_close_stack, FLAGS.output_tf_record_path_prefix,
         FLAGS.num_shards)
     image_counter = 0
+    anno_counter = 0
     for counter, image_data in enumerate(all_annotations.groupby('ImageID')):
       tf.logging.log_every_n(tf.logging.INFO, 'Processed %d images...', FLAGS.num_shards * 10,
                              counter)
@@ -106,7 +107,7 @@ def main(_):
       with tf.gfile.Open(image_path, 'rb') as image_file:
         encoded_image = image_file.read()
 
-      tf_example = viveland_tfrecord_creation.tf_example_from_annotations_data_frame(
+      tf_example, anno_count = viveland_tfrecord_creation.tf_example_from_annotations_data_frame(
           image_annotations, label_map, sub_label_map, encoded_image)
       if tf_example:
         if FLAGS.num_shards == 1:
@@ -116,8 +117,9 @@ def main(_):
             shard_idx = image_id_num % FLAGS.num_shards
         output_tfrecords[shard_idx].write(tf_example.SerializeToString())
         image_counter += 1
+        anno_counter += anno_count
 
-    print("tfrecord image counter {} ".format(image_counter))
+    print("tfrecord image counter {}, annotation counter {}".format(image_counter, anno_counter))
 
 
 
