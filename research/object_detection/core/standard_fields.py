@@ -186,6 +186,7 @@ class DetectionResultFields(object):
   detection_multiclass_scores = 'detection_multiclass_scores'
   detection_features = 'detection_features'
   detection_classes = 'detection_classes'
+  detection_sub_classes = 'detection_sub_classes'
   detection_masks = 'detection_masks'
   detection_surface_coords = 'detection_surface_coords'
   detection_boundaries = 'detection_boundaries'

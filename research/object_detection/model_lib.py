@@ -689,6 +689,16 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
         eval_metric_ops[var.op.name] = (var, tf.no_op())
       if vis_metric_ops is not None:
         eval_metric_ops.update(vis_metric_ops)
+      if fields.DetectionResultFields.detection_sub_classes in eval_dict:
+        detection_score = eval_dict[fields.DetectionResultFields.detection_scores]
+        detection_sub_scores = eval_dict[fields.DetectionResultFields.detection_sub_class_scores]
+        detection_sub_classes = eval_dict[fields.DetectionResultFields.detection_sub_classes]
+        groundtruth_sub_classes = eval_dict[fields.InputDataFields.groundtruth_sub_classes]
+        # accurate_sub_classes = tf.equal(detection_sub_classes, groundtruth_sub_classes)
+        # accurate_sub_classes = tf.cast(accurate_sub_classes, tf.int32)
+        metrics_acc_sub = tf.metrics.accuracy(labels=groundtruth_sub_classes, predictions=detection_sub_classes)
+        eval_metric_ops['accurate_sub_classes'] = metrics_acc_sub
+
       eval_metric_ops = {str(k): v for k, v in eval_metric_ops.items()}
 
       if eval_config.use_moving_averages:

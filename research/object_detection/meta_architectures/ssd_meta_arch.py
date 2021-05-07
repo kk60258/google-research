@@ -836,11 +836,16 @@ class SSDMetaArch(model.DetectionModel):
       if nmsed_additional_fields is not None and 'anchor_indices' in nmsed_additional_fields\
               and 'sub_class_predictions_with_background' in prediction_dict:
         nmsed_anchor_indices = tf.cast(nmsed_additional_fields['anchor_indices'], dtype=tf.int32)
-        # gathered_scores = tf.gather(detection_sub_class_scores, nmsed_anchor_indices, axis=1, batch_dims=1)
-        # detection_dict[fields.DetectionResultFields.detection_sub_class_scores] = gathered_scores
+        gathered_scores = tf.gather(raw_detection_sub_class_scores, nmsed_anchor_indices, axis=1, batch_dims=1)
+        detection_dict[fields.DetectionResultFields.detection_sub_class_scores] = gathered_scores
         ## tf.assert_equal(gathered_scores, nmsed_additional_fields[fields.DetectionResultFields.detection_sub_class_scores])
         detection_dict[fields.DetectionResultFields.detection_anchor_indices] = nmsed_anchor_indices
         detection_dict[fields.DetectionResultFields.raw_sub_detection_scores] = raw_detection_sub_class_scores
+
+      raw_detection_boxes = tf.squeeze(detection_boxes, axis=2)
+      gathered_boxes = tf.gather(raw_detection_boxes, nmsed_anchor_indices, axis=1, batch_dims=1)
+      tf.assert_equal(nmsed_boxes, gathered_boxes)
+
 
       return detection_dict
 
