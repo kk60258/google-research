@@ -288,7 +288,8 @@ class SSDMetaArch(model.DetectionModel):
                return_raw_detections_during_predict=False,
                nms_on_host=True,
                sub_classification_loss_weight=0,
-               sub_classification_loss = None):
+               sub_classification_loss=None,
+               sub_classification_loss_class_weight=1):
     """SSDMetaArch Constructor.
 
     TODO(rathodv,jonathanhuang): group NMS parameters + score converter into
@@ -443,6 +444,7 @@ class SSDMetaArch(model.DetectionModel):
 
     self._sub_classification_loss = sub_classification_loss
     self._sub_classification_loss_weight = sub_classification_loss_weight
+    self._sub_classification_loss_class_weight = sub_classification_loss_class_weight
 
   @property
   def feature_extractor(self):
@@ -842,9 +844,9 @@ class SSDMetaArch(model.DetectionModel):
         detection_dict[fields.DetectionResultFields.detection_anchor_indices] = nmsed_anchor_indices
         detection_dict[fields.DetectionResultFields.raw_sub_detection_scores] = raw_detection_sub_class_scores
 
-      raw_detection_boxes = tf.squeeze(detection_boxes, axis=2)
-      gathered_boxes = tf.gather(raw_detection_boxes, nmsed_anchor_indices, axis=1, batch_dims=1)
-      tf.assert_equal(nmsed_boxes, gathered_boxes)
+      # raw_detection_boxes = tf.squeeze(detection_boxes, axis=2)
+      # gathered_boxes = tf.gather(raw_detection_boxes, nmsed_anchor_indices, axis=1, batch_dims=1)
+      # tf.assert_equal(nmsed_boxes, gathered_boxes).mark_used()
 
 
       return detection_dict
@@ -959,10 +961,11 @@ class SSDMetaArch(model.DetectionModel):
 
       sub_cls_losses = 0
       if self._sub_classification_loss is not None:
+        sub_classification_loss_class_weight = tf.constant(self._sub_classification_loss_class_weight, dtype=tf.float32)
         sub_cls_losses = self._sub_classification_loss(
           prediction_dict['sub_class_predictions_with_background'],
           batch_sub_cls_targets,
-          weights=1,
+          weights=sub_classification_loss_class_weight,
           losses_mask=losses_mask)
 
       if self._expected_loss_weights_fn:

@@ -437,7 +437,7 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
       ssd_config.post_processing)
   (classification_loss, localization_loss, classification_weight,
    localization_weight, hard_example_miner, random_example_sampler,
-   expected_loss_weights_fn, sub_classification_loss, sub_classification_loss_weight) = losses_builder.build(ssd_config.loss)
+   expected_loss_weights_fn, sub_classification_loss, sub_classification_loss_weight, sub_classification_loss_class_weight) = losses_builder.build(ssd_config.loss)
   normalize_loss_by_num_matches = ssd_config.normalize_loss_by_num_matches
   normalize_loc_loss_by_codesize = ssd_config.normalize_loc_loss_by_codesize
 
@@ -486,6 +486,7 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
           ssd_config.return_raw_detections_during_predict),
       sub_classification_loss=sub_classification_loss,
       sub_classification_loss_weight=sub_classification_loss_weight,
+      sub_classification_loss_class_weight=sub_classification_loss_class_weight,
       **kwargs)
 
 
