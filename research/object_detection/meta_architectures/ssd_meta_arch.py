@@ -1054,10 +1054,11 @@ class SSDMetaArch(model.DetectionModel):
         groundtruth_sub_no_bg = tf.slice(batch_sub_cls_targets, [0, 0, 1], [-1, -1, -1])
         sub_class_diverse = tf.nn.softmax_cross_entropy_with_logits(labels=groundtruth_sub_no_bg, logits=prediction_sub_no_bg)
         sub_class_diverse = tf.reduce_mean(sub_class_diverse)
+        tf.summary.scalar('Loss/sub_class_diverse', sub_class_diverse)
 
-        loss_dict.update({
-          'Loss/sub_class_diverse': sub_class_diverse,
-        })
+        # loss_dict.update({
+        #   'Loss/sub_class_diverse': sub_class_diverse,
+        # })
 
     return loss_dict
 
