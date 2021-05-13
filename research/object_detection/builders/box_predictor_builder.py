@@ -47,7 +47,13 @@ def build_convolutional_box_predictor(is_training,
                                       class_prediction_bias_init=0.0,
                                       use_depthwise=False,
                                       box_encodings_clip_range=None,
-                                      num_sub_classes=0):
+                                      num_sub_classes=0,
+                                      use_residual=False,
+                                      residual_round=0,
+                                      conv_round=0,
+                                      sub_use_residual=False,
+                                      sub_residual_round=0,
+                                      sub_conv_round=0):
   """Builds the ConvolutionalBoxPredictor from the arguments.
 
   Args:
@@ -101,7 +107,10 @@ def build_convolutional_box_predictor(is_training,
       kernel_size=kernel_size,
       apply_sigmoid_to_scores=apply_sigmoid_to_scores,
       class_prediction_bias_init=class_prediction_bias_init,
-      use_depthwise=use_depthwise)
+      use_depthwise=use_depthwise,
+      use_residual=use_residual,
+      residual_round=residual_round,
+      conv_round=conv_round)
   sub_class_prediction_head = None
   other_heads = {}
   if num_sub_classes > 0:
@@ -114,7 +123,10 @@ def build_convolutional_box_predictor(is_training,
       apply_sigmoid_to_scores=apply_sigmoid_to_scores,
       class_prediction_bias_init=class_prediction_bias_init,
       use_depthwise=use_depthwise,
-      scope='SubClassPredictor')
+      scope='SubClassPredictor',
+      use_residual=sub_use_residual,
+      residual_round=sub_residual_round,
+      conv_round=sub_conv_round)
     other_heads.update({'sub_class_predictions_with_background': sub_class_prediction_head})
 
   return convolutional_box_predictor.ConvolutionalBoxPredictor(
@@ -710,6 +722,12 @@ def build(argscope_fn, box_predictor_config, is_training, num_classes,
       box_encodings_clip_range = BoxEncodingsClipRange(
           min=config_box_predictor.box_encodings_clip_range.min,
           max=config_box_predictor.box_encodings_clip_range.max)
+    use_residual=config_box_predictor.use_residual
+    residual_round=config_box_predictor.residual_round
+    conv_round=config_box_predictor.conv_round
+    sub_use_residual=config_box_predictor.sub_use_residual
+    sub_residual_round=config_box_predictor.sub_residual_round
+    sub_conv_round=config_box_predictor.sub_conv_round
     return build_convolutional_box_predictor(
         is_training=is_training,
         num_classes=num_classes,
@@ -728,7 +746,13 @@ def build(argscope_fn, box_predictor_config, is_training, num_classes,
             config_box_predictor.class_prediction_bias_init),
         use_depthwise=config_box_predictor.use_depthwise,
         box_encodings_clip_range=box_encodings_clip_range,
-        num_sub_classes=num_sub_classes)
+        num_sub_classes=num_sub_classes,
+        use_residual=use_residual,
+        residual_round=residual_round,
+        conv_round=conv_round,
+        sub_use_residual=sub_use_residual,
+        sub_residual_round=sub_residual_round,
+        sub_conv_round=sub_conv_round)
 
   if  box_predictor_oneof == 'weight_shared_convolutional_box_predictor':
     config_box_predictor = (

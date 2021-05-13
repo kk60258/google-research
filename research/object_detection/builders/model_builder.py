@@ -401,6 +401,7 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
   """
   num_classes = ssd_config.num_classes
   num_sub_classes = ssd_config.num_sub_classes if hasattr(ssd_config, 'num_sub_classes') else 0
+
   _check_feature_extractor_exists(ssd_config.feature_extractor.type)
 
   # Feature extractor
@@ -431,7 +432,7 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
   else:
     ssd_box_predictor = box_predictor_builder.build(
         hyperparams_builder.build, ssd_config.box_predictor, is_training,
-        num_classes, ssd_config.add_background_class, num_sub_classes)
+        num_classes, ssd_config.add_background_class, num_sub_classes,)
   image_resizer_fn = image_resizer_builder.build(ssd_config.image_resizer)
   non_max_suppression_fn, score_conversion_fn = post_processing_builder.build(
       ssd_config.post_processing)

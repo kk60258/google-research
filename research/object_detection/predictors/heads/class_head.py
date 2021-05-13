@@ -118,7 +118,10 @@ class ConvolutionalClassHead(head.Head):
                apply_sigmoid_to_scores=False,
                class_prediction_bias_init=0.0,
                use_depthwise=False,
-               scope='ClassPredictor'):
+               scope='ClassPredictor',
+               use_residual=False,
+               residual_round=0,
+               conv_round=0):
     """Constructor.
 
     Args:
@@ -159,6 +162,9 @@ class ConvolutionalClassHead(head.Head):
     self._class_prediction_bias_init = class_prediction_bias_init
     self._use_depthwise = use_depthwise
     self._scope = scope
+    self._use_residual = use_residual
+    self._residual_round = residual_round
+    self._conv_round = conv_round
 
   def predict(self, features, num_predictions_per_location):
     """Predicts boxes.
@@ -177,6 +183,45 @@ class ConvolutionalClassHead(head.Head):
     net = features
     if self._use_dropout:
       net = slim.dropout(net, keep_prob=self._dropout_keep_prob)
+      
+    residual_branch = net
+    channel = residual_branch.get_shape()[-1]
+    final_channel = num_predictions_per_location * self._num_class_slots
+
+    if self._use_residual:
+      for i in range(self._residual_round):
+        shortcut = residual_branch
+        is_final = i == self._residual_round - 1
+        if self._use_depthwise:
+          depthwise_scope = self._scope + '_depthwise_residual_{}'.format(i)
+          residual_branch = slim.separable_conv2d(
+              residual_branch, None, [self._kernel_size, self._kernel_size],
+              padding='SAME', depth_multiplier=1, stride=1,
+              rate=1, scope=depthwise_scope)
+          residual_branch = slim.conv2d(
+              residual_branch,
+              num_outputs=final_channel if is_final else channel,
+              kernel_size=[1, 1],
+              activation_fn=None if is_final else tf.nn.relu,
+              normalizer_fn=None,
+              normalizer_params=None,
+              scope=self._scope + '_residual_{}'.format(i))
+          if not is_final:
+              residual_branch = tf.add(residual_branch, shortcut, self._scope + '_residual_add{}'.format(i))
+        else:
+          residual_branch = slim.conv2d(
+            residual_branch,
+              num_outputs=final_channel if is_final else channel,
+              kernel_size=[self._kernel_size, self._kernel_size],
+              activation_fn=None if is_final else tf.nn.relu,
+              normalizer_fn=None,
+              normalizer_params=None,
+              scope=self._scope + '_residual_{}'.format(i),
+              biases_initializer=tf.constant_initializer(
+                  self._class_prediction_bias_init))
+          if not is_final:
+              residual_branch = tf.add(residual_branch, shortcut, self._scope + '_residual_add{}'.format(i))
+
     if self._use_depthwise:
       depthwise_scope = self._scope + '_depthwise'
       class_predictions_with_background = slim.separable_conv2d(
@@ -201,6 +246,48 @@ class ConvolutionalClassHead(head.Head):
           scope=self._scope,
           biases_initializer=tf.constant_initializer(
               self._class_prediction_bias_init))
+
+    if self._use_residual:
+      per_channel_weights = tf.Variable(
+        name=self._scope + '_per_residual_weight',
+        shape=(final_channel),
+        initial_value=tf.ones(shape=(final_channel)),
+        trainable=True)
+      weights_non_neg = tf.nn.relu(per_channel_weights + 0)
+      normalizer = tf.reduce_sum(weights_non_neg) + 1e-9
+      normalized_weights = weights_non_neg / normalizer
+
+      class_predictions_with_background = class_predictions_with_background + residual_branch * normalized_weights
+
+    for i in range(self._conv_round):
+      is_final = i == self._conv_round - 1
+      shortcut = class_predictions_with_background
+      if self._use_depthwise:
+        depthwise_scope = self._scope + '_depthwise_extension_{}'.format(i)
+        class_predictions_with_background = slim.separable_conv2d(
+          class_predictions_with_background, None, [self._kernel_size, self._kernel_size],
+          padding='SAME', depth_multiplier=1, stride=1,
+          rate=1, scope=depthwise_scope)
+        class_predictions_with_background = slim.conv2d(
+          class_predictions_with_background,
+          num_predictions_per_location * self._num_class_slots, [1, 1],
+          activation_fn=None if is_final else tf.nn.relu,
+          normalizer_fn=None,
+          normalizer_params=None,
+          scope=self._scope + '_extension_{}'.format(i))
+      else:
+        class_predictions_with_background = slim.conv2d(
+          class_predictions_with_background,
+          num_predictions_per_location * self._num_class_slots,
+          [self._kernel_size, self._kernel_size],
+          activation_fn=None if is_final else tf.nn.relu,
+          normalizer_fn=None,
+          normalizer_params=None,
+          scope=self._scope + '_extension_{}'.format(i),
+          biases_initializer=tf.constant_initializer(
+            self._class_prediction_bias_init))
+      class_predictions_with_background = tf.add(class_predictions_with_background, shortcut, self._scope + '_extension_add{}'.format(i))
+
     if self._apply_sigmoid_to_scores:
       class_predictions_with_background = tf.sigmoid(
           class_predictions_with_background)

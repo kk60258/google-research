@@ -530,6 +530,8 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
                 asg_map,
                 train_config.fine_tune_checkpoint,
                 include_global_step=False))
+        diff_map = [v for v in asg_map if v not in available_var_map]
+
         if use_tpu:
 
           def tpu_scaffold():

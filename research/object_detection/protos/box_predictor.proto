@@ -16,7 +16,7 @@ message BoxPredictor {
 }
 
 // Configuration proto for Convolutional box predictor.
-// Next id: 13
+// Next id: 19
 message ConvolutionalBoxPredictor {
   // Hyperparameters for convolution ops used in the box predictor.
   optional Hyperparams conv_hyperparams = 1;
@@ -63,6 +63,12 @@ message ConvolutionalBoxPredictor {
     optional float max = 2;
   }
   optional BoxEncodingsClipRange box_encodings_clip_range = 12;
+  optional bool use_residual = 13 [default = false];
+  optional int32 residual_round = 14 [default = 0];
+  optional int32 conv_round = 15 [default = 0];
+  optional bool sub_use_residual = 16[default = false];
+  optional int32 sub_residual_round = 17 [default = 0];
+  optional int32 sub_conv_round = 18 [default = 0];
 }
 
 // Configuration proto for weight shared convolutional box predictor.
