@@ -39,6 +39,7 @@ import tensorflow.compat.v1 as tf
 from object_detection.dataset_tools import viveland_tfrecord_creation
 from object_detection.dataset_tools import tf_record_creation_util
 from object_detection.utils import label_map_util
+from object_detection.core import standard_fields
 
 tf.flags.DEFINE_string('input_box_annotations_csv', None,
                        'Path to CSV containing image bounding box annotations')
@@ -93,6 +94,8 @@ def main(_):
         FLAGS.num_shards)
     image_counter = 0
     anno_counter = 0
+    type1 = 0
+    type2 = 0
     for counter, image_data in enumerate(all_annotations.groupby('ImageID')):
       tf.logging.log_every_n(tf.logging.INFO, 'Processed %d images...', FLAGS.num_shards * 10,
                              counter)
@@ -107,7 +110,7 @@ def main(_):
       with tf.gfile.Open(image_path, 'rb') as image_file:
         encoded_image = image_file.read()
 
-      tf_example, anno_count = viveland_tfrecord_creation.tf_example_from_annotations_data_frame(
+      tf_example, anno_count, raise_count, not_raise_count = viveland_tfrecord_creation.tf_example_from_annotations_data_frame(
           image_annotations, label_map, sub_label_map, encoded_image)
       if tf_example:
         if FLAGS.num_shards == 1:
@@ -115,11 +118,22 @@ def main(_):
         else:
             image_id_num = sum([ord(x) for x in image_id])
             shard_idx = image_id_num % FLAGS.num_shards
-        output_tfrecords[shard_idx].write(tf_example.SerializeToString())
-        image_counter += 1
-        anno_counter += anno_count
+
+        times = 1
+        # if not_raise_count == 0 and raise_count > 0:
+        #   times = 15
+        #   type1 += 1
+        # elif not_raise_count < raise_count:
+        #   times = 5
+        #   type2 += 1
+
+        for _ in range(times):
+          output_tfrecords[shard_idx].write(tf_example.SerializeToString())
+          image_counter += 1
+          anno_counter += anno_count
 
     print("tfrecord image counter {}, annotation counter {}".format(image_counter, anno_counter))
+    print('type1 {}, type2 {}'.format(type1, type2))
 
 
 

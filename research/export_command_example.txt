@@ -1,6 +1,6 @@
-export PATH_TO_BE_CONFIGURED=/tempssd/people_detection2/model_051119_viveland_v2_sigmoid_freeze_feature_extractor_box_class_10k_v4
-export CONFIG_FILE=${PATH_TO_BE_CONFIGURED}/freeze_feature_extractor_box_class_10k_v4.config
-export CHECKPOINT_PATH=${PATH_TO_BE_CONFIGURED}/model.ckpt-4934
+export PATH_TO_BE_CONFIGURED=/tempssd/people_detection2/model_061512_viveland_v2_sigmoid_no_freeze_5k_v9
+export CONFIG_FILE=${PATH_TO_BE_CONFIGURED}/no_freeze_5k_v9.config
+export CHECKPOINT_PATH=${PATH_TO_BE_CONFIGURED}/model.ckpt-5000
 export OUTPUT_DIR=${PATH_TO_BE_CONFIGURED}/tflite
 
 python3 object_detection/export_tflite_ssd_graph.py \

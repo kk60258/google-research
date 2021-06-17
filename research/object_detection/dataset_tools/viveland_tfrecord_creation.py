@@ -124,4 +124,8 @@ def tf_example_from_annotations_data_frame(annotations_data_frame, label_map,
                     six.ensure_binary(label_text) for label_text in
                     filtered_data_frame_labels.Class1.to_numpy()
                 ]),
-  return tf.train.Example(features=tf.train.Features(feature=feature_map)), bbox_count
+  class_raise = [label_text for label_text in filtered_data_frame_boxes.Class2.to_numpy() if label_text == '/m/raise_hand']
+  class_not_raise = [label_text for label_text in filtered_data_frame_boxes.Class2.to_numpy() if label_text == '/m/not_raise_hand']
+  print(class_raise)
+  print(class_not_raise)
+  return tf.train.Example(features=tf.train.Features(feature=feature_map)), bbox_count, len(class_raise), len(class_not_raise)
