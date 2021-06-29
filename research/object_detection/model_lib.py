@@ -425,7 +425,7 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
     `model_fn` for `Estimator`.
   """
   train_config = configs['train_config']
-  eval_input_config = configs['eval_input_config']
+  eval_input_config = configs['eval_input_config'] if 'eval_input_config' in configs else None
   eval_config = configs['eval_config']
 
   def model_fn(features, labels, mode, params=None):
@@ -888,8 +888,9 @@ def create_estimator_and_inputs(run_config,
       eval_config=eval_config,
       eval_input_config=eval_on_train_input_config,
       model_config=model_config)
+
   predict_input_fn = create_predict_input_fn(
-      model_config=model_config, predict_input_config=eval_input_configs[0])
+      model_config=model_config, predict_input_config=eval_input_configs[0]) if len(eval_input_configs) > 0 else None
 
   # Read export_to_tpu from hparams if not passed.
   if export_to_tpu is None and hparams is not None:

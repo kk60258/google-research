@@ -24,6 +24,10 @@ import tensorflow.compat.v1 as tf
 
 from object_detection import model_lib
 
+import shutil
+import pathlib
+import os
+
 flags.DEFINE_string(
     'model_dir', None, 'Path to output model directory '
     'where event and checkpoint files will be written.')
@@ -53,13 +57,24 @@ flags.DEFINE_integer(
     'retries upon encountering tf.errors.InvalidArgumentError. If negative, '
     'will always retry the evaluation.'
 )
+
+flags.DEFINE_integer(
+  'save_summary_steps', 0, ''
+)
+
+flags.DEFINE_integer(
+  'keep_checkpoint_max', 1, ''
+)
 FLAGS = flags.FLAGS
 
 
 def main(unused_argv):
   flags.mark_flag_as_required('model_dir')
   flags.mark_flag_as_required('pipeline_config_path')
-  config = tf.estimator.RunConfig(model_dir=FLAGS.model_dir)
+  config = tf.estimator.RunConfig(model_dir=FLAGS.model_dir, save_summary_steps=FLAGS.save_summary_steps, keep_checkpoint_max=FLAGS.keep_checkpoint_max)
+  pathlib.Path(FLAGS.model_dir).mkdir(parents=True, exist_ok=True)
+  if not os.path.exists(os.path.join(FLAGS.model_dir, os.path.basename(FLAGS.pipeline_config_path))):
+    shutil.copy2(FLAGS.pipeline_config_path, FLAGS.model_dir)
 
   train_and_eval_dict = model_lib.create_estimator_and_inputs(
       run_config=config,
@@ -101,7 +116,12 @@ def main(unused_argv):
         eval_on_train_data=False)
 
     # Currently only a single Eval Spec is allowed.
-    tf.estimator.train_and_evaluate(estimator, train_spec, eval_specs[0])
+    if len(eval_input_fns) > 0:
+      tf.estimator.train_and_evaluate(estimator, train_spec, eval_specs[0])
+    else:
+      estimator.train(train_input_fn,
+                      max_steps=train_steps,
+                      )
 
 
 if __name__ == '__main__':
