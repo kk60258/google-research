@@ -7,13 +7,13 @@ def frange(start, stop, interval):
     start += interval
   return result
 
-classification_weight_space = [0.1, 1, 10]
-sub_classification_weight_space = [0.1, 1, 10]
+classification_weight_space = [0.1, 1]
+sub_classification_weight_space = [1, 10]
 localization_weight_space = [0.1, 1, 10]
 
-sub_classification_loss_class_weight_no_raise_space = [0.1, 1, 10]
-sub_classification_loss_class_weight_raise_space = [0.1, 1, 10]
-sub_classification_loss_class_weight_staff_space = [0.1, 1, 10]
+sub_classification_loss_class_weight_no_raise_space = [0.1, 1]
+sub_classification_loss_class_weight_raise_space = [1, 5, 10]
+sub_classification_loss_class_weight_staff_space = [1, 5, 10]
 # sub_classification_loss_class_weight_space = [sub_classification_loss_class_weight_no_raise_space, sub_classification_loss_class_weight_raise_space, sub_classification_loss_class_weight_staff_space]
 
 # warmup_learning_rate = []
@@ -61,10 +61,12 @@ def get_strategy(index):
   }
   return search_config
 
-def iter_strategy():
-  for i in range(max_index()):
+
+def iter_strategy(start=0):
+  print('max {}'.format(max_index()))
+  for i in range(start, max_index()):
     r = get_strategy(i)
-    yield r
+    yield i, r
 
 if __name__ == '__main__':
   print(max_index())

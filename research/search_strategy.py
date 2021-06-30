@@ -14,6 +14,7 @@ flags.DEFINE_string('target_config_path_dir', '/home/jason/github/google_obj_det
 flags.DEFINE_string('model_path_dir', '/tempssd/people_detection2/', '')
 flags.DEFINE_bool('keep_summary', False, '')
 flags.DEFINE_integer('num_train_steps', 1, '')
+flags.DEFINE_integer('from_iter_num', 0, '')
 
 #eval ap
 flags.DEFINE_string('eval_workspace', '/home/jason/hic/workspace/', '')
@@ -35,7 +36,7 @@ def main(argv):
   pathlib.Path(model_path_dir).mkdir(parents=True, exist_ok=True)
 
   num_train_steps = FLAGS.num_train_steps
-  for i, strategy in enumerate(iter_strategy()):
+  for i, strategy in iter_strategy(FLAGS.from_iter_num):
     config.model.ssd.loss.classification_weight = strategy['classification_weight']
     config.model.ssd.loss.sub_classification_weight = strategy['sub_classification_weight']
     config.model.ssd.loss.localization_weight = strategy['localization_weight']
@@ -54,6 +55,7 @@ def main(argv):
     train_config_path_name ="{}_{}.config".format(timestamp, i)
     train_config_path = os.path.join(target_config_path_dir, train_config_path_name)
     write_config(config, train_config_path)
+
     model_dir = "{}/{}".format(model_path_dir, train_config_path_name[:-7])
     os.system("python3 object_detection/model_main.py "
               "--model_dir={} "
