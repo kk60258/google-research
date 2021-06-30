@@ -40,7 +40,9 @@ def main(argv):
     config.model.ssd.loss.sub_classification_weight = strategy['sub_classification_weight']
     config.model.ssd.loss.localization_weight = strategy['localization_weight']
     del config.model.ssd.loss.sub_classification_loss_class_weight[:]
-    config.model.ssd.loss.sub_classification_loss_class_weight.extend([0].extend(strategy['sub_classification_loss_class_weight']))
+    sub_classification_loss_class_weight = [0]
+    sub_classification_loss_class_weight.extend(strategy['sub_classification_loss_class_weight'])
+    config.model.ssd.loss.sub_classification_loss_class_weight.extend(sub_classification_loss_class_weight)
 
     config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.learning_rate_base = 5e-2
     config.train_config.optimizer.momentum_optimizer.learning_rate.cosine_decay_learning_rate.warmup_learning_rate = 1e-4
