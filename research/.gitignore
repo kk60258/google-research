@@ -174,5 +174,6 @@ BBox-Label-Tool/Images/*
 BBox-Label-Tool/Examples/*
 
 #configs
-*.configs
+object_detection/samples/
+
 
