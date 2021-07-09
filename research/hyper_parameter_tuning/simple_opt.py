@@ -3,10 +3,10 @@ import os
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--max_trials', type=int, default=2)
+parser.add_argument('--max_trials', type=int, default=3)
 parser.add_argument('--base_config_path', type=str, default='/home/jason/github/google_obj_detection/research/object_detection/samples/jason/search_v1_from_061512.config')
 parser.add_argument('--target_config_path_dir', type=str, default='/home/jason/github/google_obj_detection/research/object_detection/samples/jason')
-parser.add_argument('--model_path_dir', type=str, default='/tempssd/people_detection2/0708')
+parser.add_argument('--model_path_dir', type=str, default='/tempssd/people_detection2/0709_2')
 parser.add_argument('--keep_summary', type=bool, default=False)
 parser.add_argument('--num_train_steps', type=int, default=1)
 
@@ -126,20 +126,19 @@ print("Found minimum after {} trials:".format(args.max_trials))
 print(best)
 
 def get_sorted_trial_result(trials):
-  valid_trial_list = [trial for trial in trials
-                      if STATUS_OK == trial['result']['status']]
+  valid_trial_list = [trial for trial in trials]
   losses = [float(trial['result']['loss']) for trial in valid_trial_list]
   index_sorted_loss = [i for i, loss in sorted(enumerate(losses), key=lambda x: x[1])]
   trial_obj = [valid_trial_list[i] for i in index_sorted_loss]
-  return trial_obj
+  return index_sorted_loss, trial_obj
 
 model_path_dir = args.model_path_dir
 trials_txt = os.path.join(model_path_dir, "trials.txt")
 import json
 with open(trials_txt, 'w') as f:
-  sorted_trial_result = get_sorted_trial_result(trials)
-  for trial in sorted_trial_result:
+  index_sorted_loss, sorted_trial_result = get_sorted_trial_result(trials)
+  for idx, trial in zip(index_sorted_loss, sorted_trial_result):
     result = json.dumps(trial['result'], default=float)
     space = json.dumps(trial['misc']['vals'], default=float)
-    f.write(result + '\n' + space + '\n')
+    f.write(str(idx+1) + '\n' + result + '\n' + space + '\n')
 
