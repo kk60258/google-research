@@ -19,10 +19,10 @@ import cv2
 
 tf.flags.DEFINE_string('image_dir', 'images', '')
 tf.flags.DEFINE_string('label_dir', 'labels_with_ids', '')
-tf.flags.DEFINE_integer('num_shards', 10, 'Number of TFRecord shards')
+tf.flags.DEFINE_integer('num_shards', 1, 'Number of TFRecord shards')
 tf.flags.DEFINE_integer('image_size', 300, '')
 tf.flags.DEFINE_string(
-    'output_tf_record_path_prefix', None,
+    'output_tf_record_path_prefix', '/tempssd/people_detection2/dataset/MOT17/',
     'Path to the output TFRecord. The shard index and the number of shards '
     'will be appended for each output shard.')
 FLAGS = tf.flags.FLAGS
@@ -66,9 +66,8 @@ def main(_):
             tf_record_close_stack, FLAGS.output_tf_record_path_prefix,
             FLAGS.num_shards)
         image_counter = 0
+        annotation_counter = 0
         for counter, image_path_label_path in enumerate(zip(image_paths, label_paths)):
-            # if counter > 10:
-            #     break
             image_path, label_path = image_path_label_path
             if not os.path.basename(image_path)[:-4] == os.path.basename(label_path)[:-4]:
                 tf.logging.log(tf.logging.WARN, "not match image_path {} vs label_path {}".format(image_path, label_path))
@@ -82,6 +81,7 @@ def main(_):
                 raw = f.read()
             raw = raw.replace('\n', ' ')
             raw = raw.split(' ')
+            raw = [x for x in raw if x]
             class_id = raw[0:-1:6]
             instance_id = raw[1::6]
             bb_xcenter = raw[2::6]
@@ -92,13 +92,22 @@ def main(_):
                               columns=['class_id', 'instance_id', 'xcenter', 'ycenter', 'width', 'height'])
             df = df.apply(pd.to_numeric)
             df['xmin'] = df['xcenter'] - df['width'] * 0.5
+            df['xmin'].clip(lower=0.0, upper=1.0, inplace=True)
+
             df['xmax'] = df['xcenter'] + df['width'] * 0.5
+            df['xmax'].clip(lower=0.0, upper=1.0, inplace=True)
+
             df['ymin'] = df['ycenter'] - df['height'] * 0.5
+            df['ymin'].clip(lower=0.0, upper=1.0, inplace=True)
+
             df['ymax'] = df['ycenter'] + df['height'] * 0.5
+            df['ymax'].clip(lower=0.0, upper=1.0, inplace=True)
+
 
             image_name = os.path.basename(image_path)
             tf.logging.log_every_n(tf.logging.INFO, 'Processed %d images...', FLAGS.num_shards * 10, counter)
-            tf.logging.log(tf.logging.INFO, "image {} with labels {}".format(image_name, len(df)))
+            num_of_annotations = len(df)
+            tf.logging.log(tf.logging.INFO, "image {} with labels {}".format(image_name, num_of_annotations))
             # with tf.gfile.Open(image_path, 'rb') as image_file:
             #     encoded_image = image_file.read()
             #     image_decoded = tf.cond(
@@ -122,8 +131,9 @@ def main(_):
                     shard_idx = int(counter) % FLAGS.num_shards
                 output_tfrecords[shard_idx].write(tf_example.SerializeToString())
                 image_counter += 1
+                annotation_counter += num_of_annotations
 
-        print("tfrecord image counter {} ".format(image_counter))
+        print("tfrecord image counter {}, annotation counter {}".format(image_counter, annotation_counter))
 
 
 # /m/01g317	Person
