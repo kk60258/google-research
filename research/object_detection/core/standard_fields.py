@@ -325,6 +325,7 @@ class TfExampleFields(object):
   object_class_label = 'image/object/class/label'
   object_sub_class_text = 'image/object/subclass/text'
   object_sub_class_label = 'image/object/subclass/label'
+  object_instance_id = 'image/object/instance/id'
   object_bbox_ymin = 'image/object/bbox/ymin'
   object_bbox_xmin = 'image/object/bbox/xmin'
   object_bbox_ymax = 'image/object/bbox/ymax'
