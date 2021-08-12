@@ -401,6 +401,8 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
   """
   num_classes = ssd_config.num_classes
   num_sub_classes = ssd_config.num_sub_classes if hasattr(ssd_config, 'num_sub_classes') else 0
+  num_embedding = ssd_config.num_embedding if hasattr(ssd_config, 'num_embedding') else 0
+  num_track_identities = ssd_config.num_track_identities if hasattr(ssd_config, 'num_track_identities') else 0
 
   _check_feature_extractor_exists(ssd_config.feature_extractor.type)
 
@@ -432,13 +434,13 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
   else:
     ssd_box_predictor = box_predictor_builder.build(
         hyperparams_builder.build, ssd_config.box_predictor, is_training,
-        num_classes, ssd_config.add_background_class, num_sub_classes,)
+        num_classes, ssd_config.add_background_class, num_sub_classes=num_sub_classes, num_embedding=num_embedding, num_track_identities=num_track_identities)
   image_resizer_fn = image_resizer_builder.build(ssd_config.image_resizer)
   non_max_suppression_fn, score_conversion_fn = post_processing_builder.build(
       ssd_config.post_processing)
   (classification_loss, localization_loss, classification_weight,
    localization_weight, hard_example_miner, random_example_sampler,
-   expected_loss_weights_fn, sub_classification_loss, sub_classification_loss_weight, sub_classification_loss_class_weight) = losses_builder.build(ssd_config.loss)
+   expected_loss_weights_fn, sub_classification_loss, sub_classification_loss_weight, sub_classification_loss_class_weight, embedding_classification_loss) = losses_builder.build(ssd_config.loss)
   normalize_loss_by_num_matches = ssd_config.normalize_loss_by_num_matches
   normalize_loc_loss_by_codesize = ssd_config.normalize_loc_loss_by_codesize
 
@@ -455,6 +457,20 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
   ssd_meta_arch_fn = ssd_meta_arch.SSDMetaArch
   kwargs = {}
 
+  loss_config = ssd_config.loss
+  embedding_classification_loss_weight = loss_config.embedding_classification_loss_weight
+  enable_task_independent_uncertainty_training = loss_config.enable_task_independent_uncertainty_training
+  trainable_weight_classification = loss_config.trainable_weight_classification
+  trainable_weight_localization = loss_config.trainable_weight_localization
+  trainable_weight_sub_classification = loss_config.trainable_weight_sub_classification
+  trainable_weight_embedding = loss_config.trainable_weight_embedding
+
+  if enable_task_independent_uncertainty_training:
+    kwargs.update({'enable_task_independent_uncertainty_training': enable_task_independent_uncertainty_training,
+                   'trainable_weight_classification': trainable_weight_classification,
+                   'trainable_weight_localization': trainable_weight_localization,
+                   'trainable_weight_sub_classification': trainable_weight_embedding,
+                   'trainable_weight_embedding': trainable_weight_embedding})
   return ssd_meta_arch_fn(
       is_training=is_training,
       anchor_generator=anchor_generator,
@@ -488,6 +504,9 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
       sub_classification_loss=sub_classification_loss,
       sub_classification_loss_weight=sub_classification_loss_weight,
       sub_classification_loss_class_weight=sub_classification_loss_class_weight,
+      embedding_classification_loss=embedding_classification_loss,
+      embedding_classification_loss_weight=embedding_classification_loss_weight,
+      num_track_identities=num_track_identities,
       **kwargs)
 
 

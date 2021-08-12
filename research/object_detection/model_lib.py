@@ -220,6 +220,9 @@ def _prepare_groundtruth_for_eval(detection_model, class_agnostic,
     groundtruth[input_data_fields.groundtruth_sub_classes] = tf.argmax(
       detection_model.groundtruth_lists(fields.BoxListFields.sub_classes), axis=-1)
 
+  if detection_model.groundtruth_has_field(fields.BoxListFields.track_ids):
+    groundtruth[fields.BoxListFields.track_ids] = detection_model.groundtruth_lists(fields.BoxListFields.track_ids)
+
   groundtruth[input_data_fields.num_groundtruth_boxes] = (
       tf.tile([max_number_of_boxes], multiples=[groundtruth_boxes_shape[0]]))
   return groundtruth
@@ -550,10 +553,20 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
       if (mode == tf.estimator.ModeKeys.EVAL and
           eval_config.use_dummy_loss_in_eval):
         total_loss = tf.constant(1.0)
+        others_from_loss = {}
         losses_dict = {'Loss/total_loss': total_loss}
       else:
         losses_dict = detection_model.loss(
             prediction_dict, features[fields.InputDataFields.true_image_shape])
+
+        others_from_loss = dict((key, value) for key, value in losses_dict.items() if not key.startswith('Loss'))
+
+        for key, value in others_from_loss.items():
+          if key.startswith('Weight/task_independent_uncertainty'):
+            tf.summary.scalar(key, value)
+
+        losses_dict = dict((key, value) for key, value in losses_dict.items() if key not in others_from_loss)
+
         losses = [loss_tensor for loss_tensor in losses_dict.values()]
         if train_config.add_regularization_loss:
           regularization_losses = detection_model.regularization_losses()
@@ -678,7 +691,8 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
             max_boxes_to_draw=eval_config.max_num_boxes_to_visualize,
             min_score_thresh=eval_config.min_score_threshold,
             use_normalized_coordinates=False,
-            keypoint_edges=keypoint_edges or None)
+            keypoint_edges=keypoint_edges or None,
+            skip_labels=eval_config.skip_labels)
         vis_metric_ops = eval_metric_op_vis.get_estimator_eval_metric_ops(
             eval_dict)
       # not eval sub_classes yet
@@ -701,6 +715,22 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
       #   # accurate_sub_classes = tf.cast(accurate_sub_classes, tf.int32)
       #   metrics_acc_sub = tf.metrics.accuracy(labels=groundtruth_sub_classes, predictions=detection_sub_classes)
       #   eval_metric_ops['accurate_sub_classes'] = metrics_acc_sub
+
+      if fields.BoxListFields.track_ids in groundtruth:
+        # gt_track_ids = groundtruth[fields.InputDataFields.groundtruth_track_ids]
+        batch_track_identities_onehot_targets = others_from_loss['Eval/batch_track_identities_onehot_targets']
+        gathered_track_identities_onehot_targets = tf.gather(batch_track_identities_onehot_targets, detections[fields.DetectionResultFields.detection_anchor_indices], axis=1, batch_dims=1)
+
+        valid_target = tf.reduce_max(gathered_track_identities_onehot_targets, axis=-1)
+        valid_target = tf.clip_by_value(valid_target, clip_value_min=0, clip_value_max=1)
+        gathered_track_identities_targets = tf.argmax(gathered_track_identities_onehot_targets, axis=-1)
+
+        detection_track_ids = detections[fields.DetectionResultFields.detection_track_id]
+        # accurate_track_ids = tf.equal(detection_track_ids, gt_matched_track_ids)
+        # accurate_track_ids = tf.cast(accurate_track_ids, tf.int32)
+        metrics_acc_track_ids = tf.metrics.accuracy(labels=gathered_track_identities_targets, predictions=detection_track_ids, weights=valid_target)
+        eval_metric_ops['accurate_track_ids'] = metrics_acc_track_ids
+
 
       eval_metric_ops = {str(k): v for k, v in eval_metric_ops.items()}
 
@@ -864,6 +894,9 @@ def create_estimator_and_inputs(run_config,
   # update train_steps from config but only when non-zero value is provided
   if train_steps is None and train_config.num_steps != 0:
     train_steps = train_config.num_steps
+
+  group_total_ids = inputs.create_track_group_id_start(train_input_config.track_group_id_lookup, tensor=False)['total']
+  model_config.ssd.num_track_identities = group_total_ids
 
   detection_model_fn = functools.partial(
       detection_model_fn_base, model_config=model_config)

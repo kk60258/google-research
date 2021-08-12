@@ -69,6 +69,9 @@ message ConvolutionalBoxPredictor {
   optional bool sub_use_residual = 16[default = false];
   optional int32 sub_residual_round = 17 [default = 0];
   optional int32 sub_conv_round = 18 [default = 0];
+  optional bool embedding_use_residual = 19[default = false];
+  optional int32 embedding_residual_round = 20 [default = 0];
+  optional int32 embedding_conv_round = 21 [default = 0];
 }
 
 // Configuration proto for weight shared convolutional box predictor.

@@ -25,6 +25,7 @@ tf.flags.DEFINE_string(
     'output_tf_record_path_prefix', '/tempssd/people_detection2/dataset/MOT17/',
     'Path to the output TFRecord. The shard index and the number of shards '
     'will be appended for each output shard.')
+tf.flags.DEFINE_string('track_group', 'anonymous', '')
 FLAGS = tf.flags.FLAGS
 
 def get_all_files(parent, img_collection=[], label_collection=[], extension='.txt'):
@@ -60,13 +61,14 @@ def main(_):
     print(label_pbtxt_path)
     label_map = label_map_util.get_label_map_dict(label_pbtxt_path)
 
-
+    track_group = FLAGS.track_group
     with contextlib2.ExitStack() as tf_record_close_stack:
         output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(
             tf_record_close_stack, FLAGS.output_tf_record_path_prefix,
             FLAGS.num_shards)
         image_counter = 0
         annotation_counter = 0
+        max_instance_id = 0
         for counter, image_path_label_path in enumerate(zip(image_paths, label_paths)):
             image_path, label_path = image_path_label_path
             if not os.path.basename(image_path)[:-4] == os.path.basename(label_path)[:-4]:
@@ -79,6 +81,11 @@ def main(_):
 
             with open(label_path) as f:
                 raw = f.read()
+
+            if len(raw) == 0:
+                print('skip {}'.format(image_path))
+                continue
+
             raw = raw.replace('\n', ' ')
             raw = raw.split(' ')
             raw = [x for x in raw if x]
@@ -121,8 +128,13 @@ def main(_):
             image = cv2.imread(image_path)
             image_resize = cv2.resize(image, (FLAGS.image_size, FLAGS.image_size))
             image_encode = cv2.imencode('.jpg', image_resize)[1]
+            source_id = image_path
             tf_example = tf_example_from_annotations_data_frame(
-                df, label_map, image_name, image_encode.tobytes())
+                df, label_map, image_name, source_id, image_encode.tobytes(), track_group)
+
+            instance_int = [int(x) for x in instance_id]
+            if max(instance_int) > max_instance_id:
+                max_instance_id = max(instance_int)
 
             if tf_example:
                 if FLAGS.num_shards == 1:
@@ -132,13 +144,13 @@ def main(_):
                 output_tfrecords[shard_idx].write(tf_example.SerializeToString())
                 image_counter += 1
                 annotation_counter += num_of_annotations
-
+        print('max instance id {}'.format(max_instance_id))
         print("tfrecord image counter {}, annotation counter {}".format(image_counter, annotation_counter))
 
 
 # /m/01g317	Person
-def tf_example_from_annotations_data_frame(df, label_map, image_name,
-                                           encoded_image):
+def tf_example_from_annotations_data_frame(df, label_map, image_name, source_id,
+                                           encoded_image, track_group):
     feature_map = {
         standard_fields.TfExampleFields.object_bbox_ymin:
             dataset_util.float_list_feature(
@@ -152,9 +164,11 @@ def tf_example_from_annotations_data_frame(df, label_map, image_name,
         standard_fields.TfExampleFields.object_bbox_xmax:
             dataset_util.float_list_feature(
                 df['xmax'].to_numpy()),
-        standard_fields.TfExampleFields.object_instance_id:
-            dataset_util.float_list_feature(
+        standard_fields.TfExampleFields.object_track_label:
+            dataset_util.int64_list_feature(
                 df['instance_id'].to_numpy()),
+        standard_fields.TfExampleFields.object_track_group:
+            dataset_util.bytes_feature(six.ensure_binary(track_group)),
         standard_fields.TfExampleFields.object_class_text:
             dataset_util.bytes_list_feature([
                 six.ensure_binary('/m/01g317')
@@ -169,7 +183,7 @@ def tf_example_from_annotations_data_frame(df, label_map, image_name,
             dataset_util.bytes_feature(
                 six.ensure_binary(image_name)),
         standard_fields.TfExampleFields.source_id:
-            dataset_util.bytes_feature(six.ensure_binary(image_name)),
+            dataset_util.bytes_feature(six.ensure_binary(source_id)),
         standard_fields.TfExampleFields.image_encoded:
             dataset_util.bytes_feature(six.ensure_binary(encoded_image)),
     }

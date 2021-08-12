@@ -112,6 +112,7 @@ class InputDataFields(object):
   groundtruth_classes = 'groundtruth_classes'
   groundtruth_sub_classes = 'groundtruth_sub_classes'
   groundtruth_track_ids = 'groundtruth_track_ids'
+  groundtruth_track_total_ids = 'groundtruth_track_total_ids'
   groundtruth_temporal_offset = 'groundtruth_temporal_offset'
   groundtruth_track_match_flags = 'groundtruth_track_match_flags'
   groundtruth_confidences = 'groundtruth_confidences'
@@ -200,6 +201,8 @@ class DetectionResultFields(object):
   raw_detection_scores = 'raw_detection_scores'
   raw_sub_detection_scores = 'raw_sub_detection_scores'
   detection_anchor_indices = 'detection_anchor_indices'
+  detection_track_id = 'detection_track_id'
+  detection_track_embedding = 'detection_track_embedding'
 
 
 class BoxListFields(object):
@@ -325,7 +328,8 @@ class TfExampleFields(object):
   object_class_label = 'image/object/class/label'
   object_sub_class_text = 'image/object/subclass/text'
   object_sub_class_label = 'image/object/subclass/label'
-  object_instance_id = 'image/object/instance/id'
+  object_track_label = 'image/object/track/label'
+  object_track_group = 'image/object/track/group'
   object_bbox_ymin = 'image/object/bbox/ymin'
   object_bbox_xmin = 'image/object/bbox/xmin'
   object_bbox_ymax = 'image/object/bbox/ymax'

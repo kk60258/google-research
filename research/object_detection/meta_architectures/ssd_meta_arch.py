@@ -289,7 +289,11 @@ class SSDMetaArch(model.DetectionModel):
                nms_on_host=True,
                sub_classification_loss_weight=0,
                sub_classification_loss=None,
-               sub_classification_loss_class_weight=1):
+               sub_classification_loss_class_weight=1,
+               embedding_classification_loss=None,
+               embedding_classification_loss_weight=1,
+               num_track_identities=0,
+               **kwargs):
     """SSDMetaArch Constructor.
 
     TODO(rathodv,jonathanhuang): group NMS parameters + score converter into
@@ -445,6 +449,26 @@ class SSDMetaArch(model.DetectionModel):
     self._sub_classification_loss = sub_classification_loss
     self._sub_classification_loss_weight = sub_classification_loss_weight
     self._sub_classification_loss_class_weight = sub_classification_loss_class_weight
+    self._embedding_classification_loss = embedding_classification_loss
+    self._num_track_identities = num_track_identities
+    self._embedding_classification_loss_weight = embedding_classification_loss_weight
+
+    if 'enable_task_independent_uncertainty_training' in kwargs:
+      def get_variable_with_init(name):
+        init = kwargs[name]
+        return tf.Variable(init, trainable=True, name=name)
+
+      self.enable_task_independent_uncertainty_training = kwargs['enable_task_independent_uncertainty_training']
+      self.trainable_weight_classification = get_variable_with_init('trainable_weight_classification')
+      self.trainable_weight_localization = get_variable_with_init('trainable_weight_localization')
+      self.trainable_weight_sub_classification = get_variable_with_init('trainable_weight_sub_classification')
+      self.trainable_weight_embedding = get_variable_with_init('trainable_weight_embedding')
+    else:
+      self.enable_task_independent_uncertainty_training = False
+      self.trainable_weight_classification = 0
+      self.trainable_weight_localization = 0
+      self.trainable_weight_sub_classification = 0
+      self.trainable_weight_embedding = 0
 
   @property
   def feature_extractor(self):
@@ -624,10 +648,18 @@ class SSDMetaArch(model.DetectionModel):
                 tf.expand_dims(self._anchors.get(), 0), [image_shape[0], 1, 1])
     }
     for prediction_key, prediction_list in iter(predictor_results_dict.items()):
-      prediction = tf.concat(prediction_list, axis=1)
-      if (prediction_key == 'box_encodings' and prediction.shape.ndims == 4 and
-          prediction.shape[2] == 1):
-        prediction = tf.squeeze(prediction, axis=2)
+      if prediction_key == 'identity_prediction':
+        embedding_list = [result[0] for result in prediction_list]
+        identity_prediction_list = [result[1] for result in prediction_list]
+
+        embedding_concated = tf.concat(embedding_list, axis=1)
+        identity_prediction_concated = tf.concat(identity_prediction_list, axis=1)
+        prediction = (embedding_concated, identity_prediction_concated)
+      else:
+        prediction = tf.concat(prediction_list, axis=1)
+        if (prediction_key == 'box_encodings' and prediction.shape.ndims == 4 and
+            prediction.shape[2] == 1):
+          prediction = tf.squeeze(prediction, axis=2)
       predictions_dict[prediction_key] = prediction
     if self._return_raw_detections_during_predict:
       predictions_dict.update(self._raw_detections_and_feature_map_inds(
@@ -848,6 +880,19 @@ class SSDMetaArch(model.DetectionModel):
       # gathered_boxes = tf.gather(raw_detection_boxes, nmsed_anchor_indices, axis=1, batch_dims=1)
       # tf.assert_equal(nmsed_boxes, gathered_boxes).mark_used()
 
+      if nmsed_additional_fields is not None and 'anchor_indices' in nmsed_additional_fields \
+              and 'identity_prediction' in prediction_dict:
+        identity_prediction = prediction_dict['identity_prediction'][1]
+        embedding = prediction_dict['identity_prediction'][0]
+        nmsed_anchor_indices = tf.cast(nmsed_additional_fields['anchor_indices'], dtype=tf.int32)
+        detection_dict[fields.DetectionResultFields.detection_anchor_indices] = nmsed_anchor_indices
+
+        gathered_identity_prediction = tf.gather(identity_prediction, nmsed_anchor_indices, axis=1, batch_dims=1)
+        detection_track_ids = tf.argmax(gathered_identity_prediction, axis=-1)
+        gathered_embedding = tf.gather(embedding, nmsed_anchor_indices, axis=1, batch_dims=1)
+
+        detection_dict[fields.DetectionResultFields.detection_track_id] = detection_track_ids
+        detection_dict[fields.DetectionResultFields.detection_track_embedding] = gathered_embedding
 
       return detection_dict
 
@@ -890,11 +935,19 @@ class SSDMetaArch(model.DetectionModel):
         groundtruth_sub_classes_list = self.groundtruth_lists(fields.BoxListFields.sub_classes)
       else:
         groundtruth_sub_classes_list = None
+
+      if self.groundtruth_has_field(fields.BoxListFields.track_ids):
+        total_identities = self._num_track_identities
+        groundtruth_track_ids_list = self.groundtruth_lists(fields.BoxListFields.track_ids)
+        groundtruth_track_identities_onehot_list = [tf.one_hot(
+          x, depth=total_identities, axis=-1) for x in groundtruth_track_ids_list]
+      else:
+        groundtruth_track_identities_onehot_list = None
       (batch_cls_targets, batch_cls_weights, batch_reg_targets,
-       batch_reg_weights, batch_match, batch_sub_cls_targets) = self._assign_targets(
+       batch_reg_weights, batch_match, batch_sub_cls_targets, batch_track_identities_onehot_targets) = self._assign_targets(
            self.groundtruth_lists(fields.BoxListFields.boxes),
            self.groundtruth_lists(fields.BoxListFields.classes),
-           keypoints, weights, confidences, groundtruth_sub_classes_list)
+           keypoints, weights, confidences, groundtruth_sub_classes_list, groundtruth_track_identities_onehot_list)
       match_list = [matcher.Match(match) for match in tf.unstack(batch_match)]
 
       # if self.groundtruth_has_field(fields.BoxListFields.sub_classes):
@@ -968,6 +1021,14 @@ class SSDMetaArch(model.DetectionModel):
           weights=sub_classification_loss_class_weight,
           losses_mask=losses_mask)
 
+      emb_classification_losses = 0
+      if self._embedding_classification_loss is not None:
+        emb_classification_losses = self._embedding_classification_loss(
+          prediction_dict['identity_prediction'][1],
+          batch_track_identities_onehot_targets,
+          weights=tf.ones_like(batch_track_identities_onehot_targets),
+          losses_mask=losses_mask)
+
       if self._expected_loss_weights_fn:
         # Need to compute losses for assigned targets against the
         # unmatched_class_label as well as their assigned targets.
@@ -1017,6 +1078,7 @@ class SSDMetaArch(model.DetectionModel):
         localization_loss = tf.reduce_sum(location_losses)
         classification_loss = tf.reduce_sum(cls_losses)
         sub_classification_loss = tf.reduce_sum(sub_cls_losses)
+        embedding_classification_losses = tf.reduce_sum(emb_classification_losses)
 
       # Optionally normalize by number of positive matches
       normalizer = tf.constant(1.0, dtype=tf.float32)
@@ -1036,6 +1098,10 @@ class SSDMetaArch(model.DetectionModel):
                                          normalizer), classification_loss,
                                         name='classification_loss')
 
+      if self.enable_task_independent_uncertainty_training:
+        classification_loss = 0.5 * (tf.math.exp(-1 * self.trainable_weight_classification) * classification_loss + self.trainable_weight_classification)
+        localization_loss = 0.5 * (tf.math.exp(-1 * self.trainable_weight_localization) * localization_loss + self.trainable_weight_localization)
+
       loss_dict = {
         'Loss/localization_loss': localization_loss,
         'Loss/classification_loss': classification_loss,
@@ -1045,6 +1111,9 @@ class SSDMetaArch(model.DetectionModel):
         sub_classification_loss = tf.multiply((self._sub_classification_loss_weight /
                                                normalizer), sub_classification_loss,
                                               name='sub_classification_loss')
+
+        if self.enable_task_independent_uncertainty_training:
+          sub_classification_loss = 0.5 * (tf.math.exp(-1 * self.trainable_weight_sub_classification) * sub_classification_loss + self.trainable_weight_sub_classification)
 
         loss_dict.update({
           'Loss/sub_classification_loss': sub_classification_loss,
@@ -1059,6 +1128,27 @@ class SSDMetaArch(model.DetectionModel):
         # loss_dict.update({
         #   'Loss/sub_class_diverse': sub_class_diverse,
         # })
+
+      if self._embedding_classification_loss is not None:
+        track_id_normalizer = tf.maximum(tf.cast(tf.reduce_sum(batch_track_identities_onehot_targets),
+                                        dtype=tf.float32), 1.0)
+        embedding_classification_losses = tf.multiply((self._embedding_classification_loss_weight / track_id_normalizer), embedding_classification_losses, name='embedding_classification_losses')
+
+        if self.enable_task_independent_uncertainty_training:
+          embedding_classification_losses = 0.5 * (tf.math.exp(-1 * self.trainable_weight_embedding) * embedding_classification_losses + self.trainable_weight_embedding)
+
+        loss_dict.update({
+          'Loss/embedding_classification_losses': embedding_classification_losses,
+          'Eval/batch_track_identities_onehot_targets': batch_track_identities_onehot_targets,
+        })
+
+        if self.enable_task_independent_uncertainty_training:
+          loss_dict.update({
+            'Weight/task_independent_uncertainty_classification': self.trainable_weight_classification,
+            'Weight/task_independent_uncertainty_localization': self.trainable_weight_localization,
+            'Weight/task_independent_uncertainty_sub_classification': self.trainable_weight_sub_classification,
+            'Weight/task_independent_uncertainty_embedding_classification': self.trainable_weight_embedding,
+          })
 
     return loss_dict
 
@@ -1106,7 +1196,8 @@ class SSDMetaArch(model.DetectionModel):
                       groundtruth_keypoints_list=None,
                       groundtruth_weights_list=None,
                       groundtruth_confidences_list=None,
-                      groundtruth_sub_classes_list=None):
+                      groundtruth_sub_classes_list=None,
+                      groundtruth_track_identities_onehot_list=None):
     """Assign groundtruth targets.
 
     Adds a background class to each one-hot encoding of groundtruth classes
@@ -1199,7 +1290,8 @@ class SSDMetaArch(model.DetectionModel):
           groundtruth_weights_list,
           anchor_level_indices=self._anchor_level_indices,
           feature_map_spatial_dims=self._feature_map_spatial_dims,
-          groundtruth_sub_classes_with_background_list=groundtruth_sub_classes_with_background_list)
+          groundtruth_sub_classes_with_background_list=groundtruth_sub_classes_with_background_list,
+          groundtruth_track_identities_onehot_list=groundtruth_track_identities_onehot_list)
 
   def _summarize_target_assignment(self, groundtruth_boxes_list, match_list):
     """Creates tensorflow summaries for the input boxes and anchors.

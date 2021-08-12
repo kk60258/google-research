@@ -299,6 +299,37 @@ class ConvolutionalClassHead(head.Head):
         [batch_size, -1, self._num_class_slots])
     return class_predictions_with_background
 
+class FullyConnectedWrapClassHead(head.Head):
+  """run FullyConnnected after running wrapped head."""
+
+  def __init__(self,
+               class_head,
+               num_identities,
+               use_dropout,
+               dropout_keep_prob,
+               scope):
+    self._class_head = class_head
+    self._num_identities = num_identities
+    self._dropout_keep_prob=dropout_keep_prob,
+    self._use_drop = use_dropout
+    self._emb_scale = tf.math.sqrt(2.0) * tf.math.log(float(num_identities-1)) if num_identities > 1 else 1
+    self._scope = scope
+
+  def predict(self, features, num_predictions_per_location):
+    # tf.assert_equal(self._class_head,  None)
+    embedding_prediction = self._class_head.predict(features, num_predictions_per_location)
+    embedding_prediction = tf.math.l2_normalize(embedding_prediction, axis=-1)
+    class_prediction = self._emb_scale * embedding_prediction
+    if self._use_drop:
+      class_prediction = slim.dropout(class_prediction, keep_prob=self._dropout_keep_prob)
+
+    # shape = (batch_size, number_of_anchors, num_embedding) -> (batch_size, number_of_anchors, _num_identities)
+    identity_prediction = slim.fully_connected(class_prediction, self._num_identities, activation_fn=None, scope=self._scope)
+
+    return (embedding_prediction, identity_prediction)
+
+
+
 
 # TODO(alirezafathi): See if possible to unify Weight Shared with regular
 # convolutional class head.

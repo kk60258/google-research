@@ -5,7 +5,7 @@ package object_detection.protos;
 // Message for configuring the localization loss, classification loss and hard
 // example miner used for training object detection models. See core/losses.py
 // for details
-// next id 24
+// next id 31
 message Loss {
   // Localization loss to use.
   optional LocalizationLoss localization_loss = 1;
@@ -69,6 +69,17 @@ message Loss {
   optional float sub_classification_weight = 22 [default=0.0];
 
   repeated float sub_classification_loss_class_weight = 23;
+
+  // embedding classification loss to use.
+  optional ClassificationLoss embedding_classification_loss = 24;
+  optional float embedding_classification_loss_weight = 25 [default=0.0];
+
+  // https://arxiv.org/abs/1705.07115
+  optional bool enable_task_independent_uncertainty_training = 26 [default=false];
+  optional float trainable_weight_classification = 27 [default=0.0];
+  optional float trainable_weight_localization = 28 [default=0.0];
+  optional float trainable_weight_sub_classification = 29 [default=0.0];
+  optional float trainable_weight_embedding = 30 [default=0.0];
 }
 
 // Configuration for bounding box localization loss function.

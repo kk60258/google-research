@@ -53,7 +53,12 @@ def build_convolutional_box_predictor(is_training,
                                       conv_round=0,
                                       sub_use_residual=False,
                                       sub_residual_round=0,
-                                      sub_conv_round=0):
+                                      sub_conv_round=0,
+                                      num_embedding=0,
+                                      embedding_use_residual=False,
+                                      embedding_residual_round=0,
+                                      embedding_conv_round=0,
+                                      num_track_identities=0):
   """Builds the ConvolutionalBoxPredictor from the arguments.
 
   Args:
@@ -128,6 +133,29 @@ def build_convolutional_box_predictor(is_training,
       residual_round=sub_residual_round,
       conv_round=sub_conv_round)
     other_heads.update({'sub_class_predictions_with_background': sub_class_prediction_head})
+
+  if num_embedding > 0:
+    embedding_encoder_head = class_head.ConvolutionalClassHead(
+      is_training=is_training,
+      num_class_slots=num_embedding,
+      use_dropout=False,
+      dropout_keep_prob=dropout_keep_prob,
+      kernel_size=kernel_size,
+      apply_sigmoid_to_scores=False,
+      class_prediction_bias_init=class_prediction_bias_init,
+      use_depthwise=use_depthwise,
+      scope='EmbeddingEncoder',
+      use_residual=embedding_use_residual,
+      residual_round=embedding_residual_round,
+      conv_round=embedding_conv_round)
+
+    identity_predictor = class_head.FullyConnectedWrapClassHead(
+      class_head=embedding_encoder_head,
+      num_identities=num_track_identities,
+      use_dropout=use_dropout,
+      dropout_keep_prob=dropout_keep_prob,
+      scope='IdentityPredictor')
+    other_heads.update({'identity_prediction': identity_predictor})
 
   return convolutional_box_predictor.ConvolutionalBoxPredictor(
       is_training=is_training,
@@ -682,7 +710,7 @@ BoxEncodingsClipRange = collections.namedtuple('BoxEncodingsClipRange',
 
 
 def build(argscope_fn, box_predictor_config, is_training, num_classes,
-          add_background_class=True, num_sub_classes=0):
+          add_background_class=True, num_sub_classes=0, num_embedding=0, num_track_identities=0):
   """Builds box predictor based on the configuration.
 
   Builds box predictor based on the configuration. See box_predictor.proto for
@@ -728,6 +756,9 @@ def build(argscope_fn, box_predictor_config, is_training, num_classes,
     sub_use_residual=config_box_predictor.sub_use_residual
     sub_residual_round=config_box_predictor.sub_residual_round
     sub_conv_round=config_box_predictor.sub_conv_round
+    embedding_use_residual=config_box_predictor.embedding_use_residual
+    embedding_residual_round=config_box_predictor.embedding_residual_round
+    embedding_conv_round=config_box_predictor.embedding_conv_round
     return build_convolutional_box_predictor(
         is_training=is_training,
         num_classes=num_classes,
@@ -752,7 +783,13 @@ def build(argscope_fn, box_predictor_config, is_training, num_classes,
         conv_round=conv_round,
         sub_use_residual=sub_use_residual,
         sub_residual_round=sub_residual_round,
-        sub_conv_round=sub_conv_round)
+        sub_conv_round=sub_conv_round,
+        num_embedding=num_embedding,
+        embedding_use_residual=embedding_use_residual,
+        embedding_residual_round=embedding_residual_round,
+        embedding_conv_round=embedding_conv_round,
+        num_track_identities=num_track_identities
+    )
 
   if  box_predictor_oneof == 'weight_shared_convolutional_box_predictor':
     config_box_predictor = (

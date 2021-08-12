@@ -526,7 +526,8 @@ def draw_bounding_boxes_on_image_tensors(images,
                                          track_ids=None,
                                          max_boxes_to_draw=20,
                                          min_score_thresh=0.2,
-                                         use_normalized_coordinates=True):
+                                         use_normalized_coordinates=True,
+                                         skip_labels=False):
   """Draws bounding boxes, masks, and keypoints on batch of image tensors.
 
   Args:
@@ -575,7 +576,8 @@ def draw_bounding_boxes_on_image_tensors(images,
       'min_score_thresh': min_score_thresh,
       'agnostic_mode': False,
       'line_thickness': 4,
-      'keypoint_edges': keypoint_edges
+      'keypoint_edges': keypoint_edges,
+      'skip_labels': skip_labels
   }
   if true_image_shape is None:
     true_shapes = tf.constant(-1, shape=[images.shape.as_list()[0], 3])
@@ -627,7 +629,8 @@ def draw_side_by_side_evaluation_image(eval_dict,
                                        max_boxes_to_draw=20,
                                        min_score_thresh=0.2,
                                        use_normalized_coordinates=True,
-                                       keypoint_edges=None):
+                                       keypoint_edges=None,
+                                       skip_labels=False):
   """Creates a side-by-side image with detections and groundtruth.
 
   Bounding boxes (and instance masks, if available) are visualized on both
@@ -727,7 +730,10 @@ def draw_side_by_side_evaluation_image(eval_dict,
         keypoint_edges=keypoint_edges,
         max_boxes_to_draw=max_boxes_to_draw,
         min_score_thresh=min_score_thresh,
-        use_normalized_coordinates=use_normalized_coordinates)
+        use_normalized_coordinates=use_normalized_coordinates,
+        track_ids=tf.expand_dims(
+          eval_dict[detection_fields.detection_track_id][indx], axis=0),
+        skip_labels=skip_labels)
     num_gt_boxes_i = num_gt_boxes[indx]
     images_with_groundtruth = draw_bounding_boxes_on_image_tensors(
         tf.expand_dims(
@@ -759,7 +765,10 @@ def draw_side_by_side_evaluation_image(eval_dict,
         keypoint_edges=keypoint_edges,
         max_boxes_to_draw=None,
         min_score_thresh=0.0,
-        use_normalized_coordinates=use_normalized_coordinates)
+        use_normalized_coordinates=use_normalized_coordinates,
+        track_ids=tf.expand_dims(
+          eval_dict[input_data_fields.groundtruth_track_ids][indx][:num_gt_boxes_i], axis=0),
+        skip_labels=skip_labels)
     images_to_visualize = tf.concat([images_with_detections,
                                      images_with_groundtruth], axis=2)
 
@@ -1497,7 +1506,8 @@ class VisualizeSingleFrameDetections(EvalMetricOpsVisualization):
                min_score_thresh=0.2,
                use_normalized_coordinates=True,
                summary_name_prefix='Detections_Left_Groundtruth_Right',
-               keypoint_edges=None):
+               keypoint_edges=None,
+               skip_labels=False):
     super(VisualizeSingleFrameDetections, self).__init__(
         category_index=category_index,
         max_examples_to_draw=max_examples_to_draw,
@@ -1506,10 +1516,12 @@ class VisualizeSingleFrameDetections(EvalMetricOpsVisualization):
         use_normalized_coordinates=use_normalized_coordinates,
         summary_name_prefix=summary_name_prefix,
         keypoint_edges=keypoint_edges)
+    self._skip_labels = skip_labels
 
   def images_from_evaluation_dict(self, eval_dict):
     return draw_side_by_side_evaluation_image(eval_dict, self._category_index,
                                               self._max_boxes_to_draw,
                                               self._min_score_thresh,
                                               self._use_normalized_coordinates,
-                                              self._keypoint_edges)
+                                              self._keypoint_edges,
+                                              self._skip_labels)

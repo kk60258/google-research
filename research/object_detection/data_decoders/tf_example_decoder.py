@@ -142,7 +142,8 @@ class TfExampleDecoder(data_decoder.DataDecoder):
                load_dense_pose=False,
                load_track_id=False,
                load_keypoint_depth_features=False,
-               sub_label_map_proto_file=None):
+               sub_label_map_proto_file=None,
+               load_track_group=False):
     """Constructor sets keys_to_features and items_to_handlers.
 
     Args:
@@ -411,6 +412,13 @@ class TfExampleDecoder(data_decoder.DataDecoder):
       self.items_to_handlers[
           fields.InputDataFields.groundtruth_track_ids] = (
               slim_example_decoder.Tensor('image/object/track/label'))
+
+    if load_track_group:
+      self.keys_to_features['image/object/track/group'] = (
+        tf.VarLenFeature(tf.string))
+      self.items_to_handlers[
+        fields.TfExampleFields.object_track_group] = (
+        slim_example_decoder.Tensor('image/object/track/group', default_value='anonymous'))
 
     load_sub_class_label = bool(sub_label_map_proto_file)
     if label_map_proto_file:

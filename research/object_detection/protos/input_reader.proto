@@ -30,7 +30,7 @@ enum InputType {
   TF_SEQUENCE_EXAMPLE = 2;  // TfSequenceExample Input
 }
 
-// Next id: 39
+// Next id: 40
 message InputReader {
   // Name of input reader. Typically used to describe the dataset that is read
   // by this input reader.
@@ -194,6 +194,7 @@ message InputReader {
   optional bool expand_labels_hierarchy = 29 [default = false];
 
   optional string sub_label_map_path = 38 [default = ""];
+  optional string track_group_id_lookup = 39 [default = ""];
 }
 
 // An input reader that reads TF Example or TF Sequence Example protos from

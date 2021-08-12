@@ -946,6 +946,9 @@ def result_dict_for_batched_example(images,
     output_dict[detection_fields.detection_sub_class_scores] = detection_sub_class_scores
     output_dict[detection_fields.detection_sub_classes] = tf.argmax(detection_sub_class_scores, axis=-1)
 
+  if detection_fields.detection_track_id in detections:
+    output_dict[detection_fields.detection_track_id] = detections[detection_fields.detection_track_id]
+
   if detection_fields.detection_masks in detections:
     detection_masks = detections[detection_fields.detection_masks]
     output_dict[detection_fields.detection_masks] = resize_detection_masks(

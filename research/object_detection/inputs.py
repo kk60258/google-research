@@ -40,6 +40,15 @@ from object_detection.protos import train_pb2
 from object_detection.utils import config_util
 from object_detection.utils import ops as util_ops
 from object_detection.utils import shape_utils
+# pylint: disable=g-import-not-at-top
+try:
+  from tensorflow.contrib import lookup as contrib_lookup
+
+except ImportError:
+  # TF 2.0 doesn't ship with contrib.
+  pass
+# pylint: enable=g-import-not-at-top
+import json
 
 HASH_KEY = 'hash'
 HASH_BINS = 1 << 31
@@ -157,7 +166,8 @@ def transform_input_data(tensor_dict,
                          use_multiclass_scores=False,
                          use_bfloat16=False,
                          retain_original_image_additional_channels=False,
-                         keypoint_type_weight=None):
+                         keypoint_type_weight=None,
+                         track_group_id_start_map=None):
   """A single function that is responsible for all input data transformations.
 
   Data transformation functions are applied in the following order.
@@ -219,6 +229,7 @@ def transform_input_data(tensor_dict,
   out_tensor_dict = tensor_dict.copy()
 
   input_fields = fields.InputDataFields
+  example_fields = fields.TfExampleFields
   labeled_classes_field = input_fields.groundtruth_labeled_classes
   image_classes_field = input_fields.groundtruth_image_classes
   verified_neg_classes_field = input_fields.groundtruth_verified_neg_classes
@@ -249,6 +260,16 @@ def transform_input_data(tensor_dict,
             out_tensor_dict[input_fields.groundtruth_boxes],
             out_tensor_dict[input_fields.groundtruth_classes],
             num_classes)
+
+  if input_fields.groundtruth_track_ids in out_tensor_dict and example_fields.object_track_group in out_tensor_dict and track_group_id_start_map is not None:
+    cond = tf.greater(out_tensor_dict[input_fields.groundtruth_track_ids], 0)
+    out_tensor_dict[input_fields.groundtruth_track_ids] = tf.where(cond,
+                                                                  out_tensor_dict[input_fields.groundtruth_track_ids] +
+                                                                  track_group_id_start_map.lookup(out_tensor_dict[example_fields.object_track_group]),
+                                                                  -1 * tf.ones_like(out_tensor_dict[input_fields.groundtruth_track_ids]))
+    # out_tensor_dict[input_fields.groundtruth_track_total_ids] = tf.cast(track_group_id_start_map.lookup(tf.constant('total', dtype=tf.string)), tf.int32)
+    del out_tensor_dict[example_fields.object_track_group]
+
 
   if input_fields.groundtruth_boxes in out_tensor_dict:
     out_tensor_dict = util_ops.filter_groundtruth_with_nan_box_coordinates(
@@ -775,6 +796,49 @@ def create_train_input_fn(train_config, train_input_config,
   return _train_input_fn
 
 
+def create_track_group_id_start(path, tensor=True, name='hash_table'):
+  if path:
+    with open(path) as f:
+      track_group_to_max_id_dict = json.load(f)
+
+    id_start = {}
+    last = 0
+    for k, v in track_group_to_max_id_dict.items():
+      if v > 0:
+        id_start.update({k: last})
+        last = last + v
+      else:
+        id_start.update({k: 0})
+    id_start.update({'total': last + 1}) # id start from 1 and this value will be depth of one hot encoding
+
+    for k, v in id_start.items():
+      print(k, v)
+
+    if not tensor:
+      return id_start
+
+    try:
+      # Dynamically try to load the tf v2 lookup, falling back to contrib
+      lookup = tf.compat.v2.lookup
+      hash_table_class = tf.compat.v2.lookup.StaticHashTable
+    except AttributeError:
+      lookup = contrib_lookup
+      hash_table_class = contrib_lookup.HashTable
+
+    # sess.run(tf.initialize_all_tables())
+    initializer = lookup.KeyValueTensorInitializer(
+      keys=tf.constant(list(id_start.keys()), name=name+'_key'),
+      values=tf.constant(list(id_start.values()), dtype=tf.int32, name=name+'_value'), name=name+'_init')
+
+    track_group_id_start_map = hash_table_class(
+      initializer=initializer,
+      default_value=-1,
+      name=name
+    )
+    return track_group_id_start_map
+  else:
+    return None
+
 def train_input(train_config, train_input_config,
                 model_config, model=None, params=None, input_context=None):
   """Returns `features` and `labels` tensor dictionaries for training.
@@ -867,6 +931,11 @@ def train_input(train_config, train_input_config,
   num_classes = config_util.get_number_of_classes(model_config)
   num_sub_classes = config_util.get_number_of_sub_classes(model_config)
 
+  if train_input_config.track_group_id_lookup:
+    track_group_id_start_map = create_track_group_id_start(train_input_config.track_group_id_lookup, name='hash_table_for_train')
+  else:
+    track_group_id_start_map = None
+
   def transform_and_pad_input_data_fn(tensor_dict):
     """Combines transform and pad operation."""
     data_augmentation_options = [
@@ -890,7 +959,8 @@ def train_input(train_config, train_input_config,
         retain_original_image=train_config.retain_original_images,
         use_multiclass_scores=train_config.use_multiclass_scores,
         use_bfloat16=train_config.use_bfloat16,
-        keypoint_type_weight=keypoint_type_weight)
+        keypoint_type_weight=keypoint_type_weight,
+        track_group_id_start_map=track_group_id_start_map)
 
     tensor_dict = pad_input_data_to_static_shapes(
         tensor_dict=transform_data_fn(tensor_dict),
@@ -1033,6 +1103,11 @@ def eval_input(eval_config, eval_input_config, model_config,
   else:
     model_preprocess_fn = model.preprocess
 
+  if eval_input_config.track_group_id_lookup:
+    track_group_id_start_map = create_track_group_id_start(eval_input_config.track_group_id_lookup, name='hash_table_for_eval')
+  else:
+    track_group_id_start_map = None
+
   def transform_and_pad_input_data_fn(tensor_dict):
     """Combines transform and pad operation."""
     num_classes = config_util.get_number_of_classes(model_config)
@@ -1051,7 +1126,8 @@ def eval_input(eval_config, eval_input_config, model_config,
         retain_original_image=eval_config.retain_original_images,
         retain_original_image_additional_channels=
         eval_config.retain_original_image_additional_channels,
-        keypoint_type_weight=keypoint_type_weight)
+        keypoint_type_weight=keypoint_type_weight,
+        track_group_id_start_map=track_group_id_start_map)
     tensor_dict = pad_input_data_to_static_shapes(
         tensor_dict=transform_data_fn(tensor_dict),
         max_num_boxes=eval_input_config.max_number_of_boxes,
