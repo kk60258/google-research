@@ -803,7 +803,8 @@ def create_track_group_id_start(path, tensor=True, name='hash_table'):
 
     id_start = {}
     last = 0
-    for k, v in track_group_to_max_id_dict.items():
+    sorted_items = sorted(track_group_to_max_id_dict.items(), key=lambda item: item[0])
+    for k, v in sorted_items:
       if v > 0:
         id_start.update({k: last})
         last = last + v
