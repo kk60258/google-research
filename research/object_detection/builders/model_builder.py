@@ -469,7 +469,7 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
     kwargs.update({'enable_task_independent_uncertainty_training': enable_task_independent_uncertainty_training,
                    'trainable_weight_classification': trainable_weight_classification,
                    'trainable_weight_localization': trainable_weight_localization,
-                   'trainable_weight_sub_classification': trainable_weight_embedding,
+                   'trainable_weight_sub_classification': trainable_weight_sub_classification,
                    'trainable_weight_embedding': trainable_weight_embedding})
   return ssd_meta_arch_fn(
       is_training=is_training,
