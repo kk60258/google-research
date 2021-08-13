@@ -59,7 +59,7 @@ flags.DEFINE_integer(
 )
 
 flags.DEFINE_integer(
-  'save_summary_steps', 0, ''
+  'save_summary_steps', 100, ''
 )
 
 flags.DEFINE_integer(
