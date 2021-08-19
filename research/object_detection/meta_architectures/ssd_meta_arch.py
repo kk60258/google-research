@@ -893,6 +893,7 @@ class SSDMetaArch(model.DetectionModel):
 
         detection_dict[fields.DetectionResultFields.detection_track_id] = detection_track_ids
         detection_dict[fields.DetectionResultFields.detection_track_embedding] = gathered_embedding
+        detection_dict[fields.DetectionResultFields.raw_track_embedding] = embedding
 
       return detection_dict
 

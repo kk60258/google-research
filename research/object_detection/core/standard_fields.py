@@ -203,6 +203,7 @@ class DetectionResultFields(object):
   detection_anchor_indices = 'detection_anchor_indices'
   detection_track_id = 'detection_track_id'
   detection_track_embedding = 'detection_track_embedding'
+  raw_track_embedding = 'raw_track_embedding'
 
 
 class BoxListFields(object):

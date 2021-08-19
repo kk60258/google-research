@@ -322,6 +322,9 @@ def add_output_tensor_nodes(postprocessed_tensors,
   sub_class_scores = postprocessed_tensors.get(fields.DetectionResultFields.detection_sub_class_scores)
   anchor_indices = postprocessed_tensors.get(fields.DetectionResultFields.detection_anchor_indices)
   raw_sub_scores = postprocessed_tensors.get(fields.DetectionResultFields.raw_sub_detection_scores)
+  raw_track_embedding = postprocessed_tensors.get(fields.DetectionResultFields.raw_track_embedding)
+  detection_track_embedding = postprocessed_tensors.get(fields.DetectionResultFields.detection_track_embedding)
+
   outputs = {}
   outputs[detection_fields.detection_boxes] = tf.identity(
       boxes, name=detection_fields.detection_boxes)
@@ -359,6 +362,12 @@ def add_output_tensor_nodes(postprocessed_tensors,
   if raw_sub_scores is not None:
     outputs[fields.DetectionResultFields.raw_sub_detection_scores] = tf.identity(
       raw_sub_scores, name=fields.DetectionResultFields.raw_sub_detection_scores)
+  if detection_track_embedding is not None:
+      outputs[fields.DetectionResultFields.detection_track_embedding] = tf.identity(
+          detection_track_embedding, name=fields.DetectionResultFields.detection_track_embedding)
+  if raw_track_embedding is not None:
+      outputs[fields.DetectionResultFields.raw_track_embedding] = tf.identity(
+          raw_track_embedding, name=fields.DetectionResultFields.raw_track_embedding)
   for output_key in outputs:
     tf.add_to_collection(output_collection_name, outputs[output_key])
 
