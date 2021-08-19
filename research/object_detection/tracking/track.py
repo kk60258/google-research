@@ -13,20 +13,6 @@ import glob
 import logging
 import motmetrics as mm
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--image_dir', type=str)
-parser.add_argument('--min_box_area', default=0.4, type=float)
-parser.add_argument('--show_image', default=False, type=bool)
-parser.add_argument('--save_dir', default='', type=str)
-# tracker
-parser.add_argument('--track_buffer', default=30, type=int)
-parser.add_argument('--conf_thres', default=0.4, type=float)
-# detector
-parser.add_argument('--det_thres', default=0.3, type=float)
-parser.add_argument('--saved_model_dir', default='', type=str)
-
-
-opt = parser.parse_args()
 
 def write_results(filename, results, data_type):
     if data_type == 'mot':
@@ -49,7 +35,15 @@ def write_results(filename, results, data_type):
                 f.write(line)
     logger.info('save results to {}'.format(filename))
 
-def eval_seq(result_filename, images, data_type):
+def eval_seq(opt, images, result_filename, data_type='mot'):
+    '''
+
+    :param opt: argument from parse_args
+    :param images:
+    :param result_filename:
+    :param data_type:
+    :return:
+    '''
     model = Model(opt)
     tracker = JDETracker(opt)
     timer_model = Timer('model')
@@ -98,12 +92,11 @@ def eval_seq(result_filename, images, data_type):
             cv2.imwrite(os.path.join(opt.save_dir, '{}.jpg'.format(os.path.basename(image_path)[:-4])), online_im)
     # save results
     average_time = (timer_model.total_time + timer_tracker.total_time + 1e-10) / timer_model.calls
-    write_results(result_filename, results, 'mot')
+    write_results(result_filename, results, data_type)
     return frame_id, average_time, timer_model.calls
 
 
-def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), exp_name='demo',
-         save_images=False, save_videos=False, show_image=True):
+def main(opt, data_root='/data/MOT16/train', seqs=('MOT16-05',), exp_name='demo', save_images=False, save_videos=False, show_image=True):
     logger.setLevel(logging.INFO)
     result_root = os.path.join(data_root, '..', 'results', exp_name)
     # mkdir_if_missing(result_root)
@@ -125,7 +118,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
         result_filename = os.path.join(result_root, '{}.txt'.format(seq))
         meta_info = open(os.path.join(data_root, seq, 'seqinfo.ini')).read()
         frame_rate = int(meta_info[meta_info.find('frameRate')+10:meta_info.find('\nseqLength')])
-        nf, ta, tc = eval_seq(opt, images, data_type, result_filename,
+        nf, ta, tc = eval_seq(opt, images, result_filename, data_type=data_type,
                               save_dir=output_dir, show_image=show_image, frame_rate=frame_rate)
         n_frame += nf
         timer_avgs.append(ta)
@@ -158,19 +151,34 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     Evaluator.save_summary(summary, os.path.join(result_root, 'summary_{}.xlsx'.format(exp_name)))
 
 
-if __name__ == '__main__':
+def parse_args(args=None):
+    '''
+
+    :param args:
+    :return:
+    '''
     parser = argparse.ArgumentParser(prog='track.py')
-    parser.add_argument('--cfg', type=str, default='cfg/yolov3.cfg', help='cfg file path')
-    parser.add_argument('--weights', type=str, default='weights/latest.pt', help='path to weights file')
-    parser.add_argument('--iou-thres', type=float, default=0.5, help='iou threshold required to qualify as detected')
-    parser.add_argument('--conf-thres', type=float, default=0.5, help='object confidence threshold')
-    parser.add_argument('--nms-thres', type=float, default=0.4, help='iou threshold for non-maximum suppression')
-    parser.add_argument('--min-box-area', type=float, default=200, help='filter out tiny boxes')
-    parser.add_argument('--track-buffer', type=int, default=30, help='tracking buffer')
+    parser.add_argument('--mot_data_root', default='', type=str)
+    parser.add_argument('--min_box_area', default=0.4, type=float, help='filter out tiny boxes')
+    parser.add_argument('--show_image', default=False, type=bool)
+    parser.add_argument('--save_dir', default='', type=str)
+    # tracker
+    parser.add_argument('--track_buffer', default=30, type=int)
+    parser.add_argument('--conf_thres', default=0.5, type=float)
+    # detector
+    parser.add_argument('--det_thres', default=0.5, type=float)
+    parser.add_argument('--saved_model_dir', default='', type=str)
+
+    parser.add_argument('--nms_thres', type=float, default=0.4, help='iou threshold for non-maximum suppression')
+
     parser.add_argument('--test-mot16', action='store_true', help='tracking buffer')
     parser.add_argument('--save-images', action='store_true', help='save tracking results (image)')
     parser.add_argument('--save-videos', action='store_true', help='save tracking results (video)')
-    opt = parser.parse_args()
+    return parser.parse_args(args)
+
+if __name__ == '__main__':
+
+    opt = parse_args()
     print(opt, end='\n\n')
 
     if not opt.test_mot16:
@@ -182,7 +190,7 @@ if __name__ == '__main__':
                       MOT17-11-SDP
                       MOT17-13-SDP
                     '''
-        data_root = '/home/wangzd/datasets/MOT/MOT17/images/train'
+        # data_root = '/home/wangzd/datasets/MOT/MOT17/images/train'
     else:
         seqs_str = '''MOT16-01
                      MOT16-03
@@ -191,13 +199,13 @@ if __name__ == '__main__':
                      MOT16-08
                      MOT16-12
                      MOT16-14'''
-        data_root = '/home/wangzd/datasets/MOT/MOT16/images/test'
+        # data_root = '/home/wangzd/datasets/MOT/MOT16/images/test'
+    data_root = opt.mot_data_root
     seqs = [seq.strip() for seq in seqs_str.split()]
 
     main(opt,
          data_root=data_root,
          seqs=seqs,
-         exp_name=opt.weights.split('/')[-2],
          show_image=False,
          save_images=opt.save_images,
          save_videos=opt.save_videos)
