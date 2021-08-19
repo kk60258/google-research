@@ -622,6 +622,11 @@ def export_inference_graph(input_type,
     side_input_types: List of types of the side input tensors,
       required if use_side_inputs is True.
   """
+  train_input_config = pipeline_config.train_input_reader
+  if train_input_config.track_group_id_lookup:
+    import object_detection.inputs as inputs
+    group_total_ids = inputs.create_track_group_id_start(train_input_config.track_group_id_lookup, tensor=False)['total']
+    pipeline_config.model.ssd.num_track_identities = group_total_ids
   detection_model = model_builder.build(pipeline_config.model,
                                         is_training=False)
   graph_rewriter_fn = None
