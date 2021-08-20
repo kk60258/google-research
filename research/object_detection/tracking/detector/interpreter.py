@@ -9,7 +9,7 @@ class Model(object):
                                 'raw_track_embedding',
                                 'detection_anchor_indices',
                                  ]
-        self.det_thres = opt.det_thres
+        self.score_thres = opt.score_thres
         sess = tf.Session()
         meta_graph_def = tf.saved_model.loader.load(sess, [tf.saved_model.tag_constants.SERVING], opt.saved_model_dir)
         signature = meta_graph_def.signature_def
@@ -21,7 +21,7 @@ class Model(object):
         self.input_tensor = sess.graph.get_tensor_by_name(input_tensor_name)
         self.output_tensors = [sess.graph.get_tensor_by_name(output_tensor_name) for output_tensor_name in output_tensor_name_list]
 
-    def run(self, image):
+    def run(self, image, original_height, original_width):
         # image = cv2.resize(image_rgb,(SIZE, SIZE))
         image = image[np.newaxis, ...] # normalize value in -1~+1 in model.preprocess
         outputs = self.sess.run(self.output_tensors, feed_dict={self.input_tensor: image})
@@ -36,14 +36,16 @@ class Model(object):
 
         # pick nms result. Actually, we can get nms result directly.
         for no, idx in enumerate(detection_anchor_indices[0]):
-            picked_detection_scores = raw_detection_scores[0, idx]
-            if picked_detection_scores < self.det_thres:
+            picked_detection_scores = raw_detection_scores[0, idx, 1]
+            if picked_detection_scores < self.score_thres:
                 break
             # [ymin, xmin, ymax, xmax]
             # value in 0-1
             picked_detection_boxes = raw_detection_boxes[0, idx]
             picked_detection_boxes = np.clip(picked_detection_boxes, 0, 1)
-
+            # to absolute ordinate
+            picked_detection_boxes = picked_detection_boxes * np.array([original_height, original_width, original_height, original_width])
+            picked_detection_boxes = np.array([picked_detection_boxes[1], picked_detection_boxes[0], picked_detection_boxes[3], picked_detection_boxes[2]])
             picked_track_embedding = raw_track_embedding[0, idx]
 
             pred_bboxes_list.append(picked_detection_boxes)

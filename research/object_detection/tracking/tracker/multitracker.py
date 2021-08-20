@@ -161,7 +161,7 @@ class JDETracker(object):
         self.removed_stracks = []  # type: list[STrack]
 
         self.frame_id = 0
-        self.det_thresh = opt.conf_thres
+        self.new_track_thres = opt.new_track_thres
         self.buffer_size = int(frame_rate / 30.0 * opt.track_buffer)
         self.max_time_lost = self.buffer_size
 
@@ -293,7 +293,7 @@ class JDETracker(object):
         """ Step 4: Init new stracks"""
         for inew in u_detection:
             track = detections[inew]
-            if track.score < self.det_thresh:
+            if track.score < self.new_track_thres:
                 continue
             track.activate(self.kalman_filter, self.frame_id)
             activated_starcks.append(track)

@@ -1,4 +1,4 @@
-from tracker.multitracker import JDETracker
+from tracker.multitracker import JDETracker, STrack
 from utils.timer import Timer
 from utils import visualization as vis
 from utils.log import logger
@@ -12,7 +12,7 @@ import numpy as np
 import glob
 import logging
 import motmetrics as mm
-
+import pathlib
 
 def write_results(filename, results, data_type):
     if data_type == 'mot':
@@ -35,7 +35,7 @@ def write_results(filename, results, data_type):
                 f.write(line)
     logger.info('save results to {}'.format(filename))
 
-def eval_seq(opt, images, result_filename, data_type='mot'):
+def eval_seq(opt, images, result_filename, save_dir=None, show_image=False, data_type='mot', frame_rate=30):
     '''
 
     :param opt: argument from parse_args
@@ -45,7 +45,7 @@ def eval_seq(opt, images, result_filename, data_type='mot'):
     :return:
     '''
     model = Model(opt)
-    tracker = JDETracker(opt)
+    tracker = JDETracker(opt, frame_rate)
     timer_model = Timer('model')
     timer_tracker = Timer('tracker')
     results = []
@@ -58,12 +58,20 @@ def eval_seq(opt, images, result_filename, data_type='mot'):
             image_rgb = cv2.resize(image_rgb, (300, 300))
 
         timer_model.tic()
-        pred_bboxs, pred_scores, pred_embeddings = model.run(image_rgb)
+        pred_bboxs, pred_scores, pred_embeddings = model.run(image_rgb, image.shape[0], image.shape[1])
         timer_model.toc()
 
         # pred_bboxs = [np.array([0.2, 0.3, 0.6, 0.4]), np.array([0.3, 0.2, 0.4, 0.9]), np.array([0.4, 0.0, 0.6, 0.3])] * 10
         # pred_scores = [0.4, 0.6, 0.9]
         # pred_embeddings = [np.arange(5.), np.arange(5., 10.), np.arange(11., 16.)]
+
+        # pred_bboxs_tlwh = [STrack.tlbr_to_tlwh(box) for box in pred_bboxs]
+        # online_im_test = vis.plot_tracking(image, pred_bboxs_tlwh, list(range(len(pred_bboxs))), frame_id=frame_id,
+        #                               fps=1. / 1)
+        # f = os.path.join(save_dir, '{}_.jpg'.format(os.path.basename(image_path)[:-4]))
+        # print(f)
+        # cv2.imwrite(f, online_im_test)
+
         timer_tracker.tic()
         online_targets = tracker.update(pred_bboxs, pred_scores, pred_embeddings)
         timer_tracker.toc()
@@ -73,23 +81,25 @@ def eval_seq(opt, images, result_filename, data_type='mot'):
         for t in online_targets:
             tlwh = t.tlwh
             tid = t.track_id
-            # vertical = tlwh[2] / tlwh[3] > 1.6
-            # if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
-            online_tlwhs.append(tlwh)
-            online_ids.append(tid)
+            vertical = tlwh[2] / tlwh[3] > 1.6
+            if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
+                online_tlwhs.append(tlwh)
+                online_ids.append(tid)
             print(tlwh, tid)
 
         # save results
         results.append((frame_id + 1, online_tlwhs, online_ids))
-        if opt.show_image or opt.save_dir is not None:
+        if show_image or save_dir is not None:
             average_time = (timer_model.total_time + timer_tracker.total_time + 1e-10) / timer_model.calls
             online_im = vis.plot_tracking(image, online_tlwhs, online_ids, frame_id=frame_id,
                                           fps=1. / average_time)
-        if opt.show_image:
+        if show_image:
             cv2.imshow('online_im', online_im)
 
-        if opt.save_dir is not None:
-            cv2.imwrite(os.path.join(opt.save_dir, '{}.jpg'.format(os.path.basename(image_path)[:-4])), online_im)
+        if save_dir is not None:
+            f = os.path.join(save_dir, '{}.jpg'.format(os.path.basename(image_path)[:-4]))
+            print(f)
+            cv2.imwrite(f, online_im)
     # save results
     average_time = (timer_model.total_time + timer_tracker.total_time + 1e-10) / timer_model.calls
     write_results(result_filename, results, data_type)
@@ -98,8 +108,8 @@ def eval_seq(opt, images, result_filename, data_type='mot'):
 
 def main(opt, data_root='/data/MOT16/train', seqs=('MOT16-05',), exp_name='demo', save_images=False, save_videos=False, show_image=True):
     logger.setLevel(logging.INFO)
-    result_root = os.path.join(data_root, '..', 'results', exp_name)
-    # mkdir_if_missing(result_root)
+    result_root = os.path.join(opt.saved_model_dir, '..', 'results', exp_name)
+    pathlib.Path(result_root).mkdir(parents=True, exist_ok=True)
     data_type = 'mot'
     #
     # # Read config
@@ -111,10 +121,12 @@ def main(opt, data_root='/data/MOT16/train', seqs=('MOT16-05',), exp_name='demo'
     n_frame = 0
     timer_avgs, timer_calls = [], []
     for seq in seqs:
-        output_dir = os.path.join(data_root, '..','outputs', exp_name, seq) if save_images or save_videos else None
+        output_dir = os.path.join(opt.saved_model_dir, '..','outputs', exp_name, seq) if save_images or save_videos else None
+        if output_dir:
+            pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         logger.info('start seq: {}'.format(seq))
-        images = glob.glob(osp.join(data_root, seq, 'img1', '*.jpg'))
+        images = sorted(glob.glob(osp.join(data_root, seq, 'img1', '*.jpg')))
         result_filename = os.path.join(result_root, '{}.txt'.format(seq))
         meta_info = open(os.path.join(data_root, seq, 'seqinfo.ini')).read()
         frame_rate = int(meta_info[meta_info.find('frameRate')+10:meta_info.find('\nseqLength')])
@@ -159,14 +171,13 @@ def parse_args(args=None):
     '''
     parser = argparse.ArgumentParser(prog='track.py')
     parser.add_argument('--mot_data_root', default='', type=str)
-    parser.add_argument('--min_box_area', default=0.4, type=float, help='filter out tiny boxes')
+    parser.add_argument('--min_box_area', default=200, type=float, help='filter out tiny boxes')
     parser.add_argument('--show_image', default=False, type=bool)
-    parser.add_argument('--save_dir', default='', type=str)
     # tracker
     parser.add_argument('--track_buffer', default=30, type=int)
-    parser.add_argument('--conf_thres', default=0.5, type=float)
+    parser.add_argument('--new_track_thres', default=0.5, type=float)
     # detector
-    parser.add_argument('--det_thres', default=0.5, type=float)
+    parser.add_argument('--score_thres', default=0.5, type=float)
     parser.add_argument('--saved_model_dir', default='', type=str)
 
     parser.add_argument('--nms_thres', type=float, default=0.4, help='iou threshold for non-maximum suppression')
@@ -190,6 +201,8 @@ if __name__ == '__main__':
                       MOT17-11-SDP
                       MOT17-13-SDP
                     '''
+        # seqs_str = '''MOT17-02-SDP
+        #             '''
         # data_root = '/home/wangzd/datasets/MOT/MOT17/images/train'
     else:
         seqs_str = '''MOT16-01
