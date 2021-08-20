@@ -59,6 +59,17 @@ def box_iou(a, b):
     return box_intersection(a, b) / box_union(a, b)
 
 
+def box_avg_iou(bboxes, centroids):
+    max_iou_sum = 0
+    for bbox in bboxes:
+        max_iou = 0
+        for centroid in centroids:
+            iou = box_iou(bbox, centroid)
+            max_iou = max(max_iou, iou)
+        max_iou_sum += max_iou
+    return max_iou_sum / len(bboxes)
+
+
 # 使用k-means ++ 初始化 centroids，减少随机初始化的centroids对最终结果的影响
 # boxes是所有bounding boxes的Box对象列表
 # n_anchors是k-means的k值
@@ -200,6 +211,8 @@ def compute_centroids(bboxes, k, loss_convergence=1e-6, iterations_num=100, plus
     for bbox in bboxes:
         boxes.append(Box(0, 0, bbox[2], bbox[3]))
 
+    del bboxes
+
     if plus:
         centroids = init_centroids(boxes, k, metric)
     else:
@@ -221,10 +234,17 @@ def compute_centroids(bboxes, k, loss_convergence=1e-6, iterations_num=100, plus
 
     if metric == 'iou':
         centroids = sorted(centroids, key=lambda c: c.w)
+        avg_iou = box_avg_iou(boxes, centroids)
         # print result
         for i, centroid in enumerate(centroids):
             print("k-means result {}:".format(i))
             print(centroid.w, centroid.h)
+        print("avg_iou {}:".format(avg_iou))
+
+        with open('kmeans_result.txt', 'a') as f:
+            for i, centroid in enumerate(centroids):
+                f.write("k-means iou result {}: {} ".format(i, centroid.w / centroid.h))
+            f.write("avg_iou {}\n".format(avg_iou))
 
         w = [box.w for box in boxes]
         h = [box.h for box in boxes]
@@ -234,9 +254,15 @@ def compute_centroids(bboxes, k, loss_convergence=1e-6, iterations_num=100, plus
     elif metric == 'aspect':
         # print result
         centroids = sorted(centroids, key=lambda c: c.w)
+        avg_iou = box_avg_iou(boxes, centroids)
         for i, centroid in enumerate(centroids):
             print("k-means result {}:".format(i))
             print(centroid.w / centroid.h)
+        print("avg_iou {}:".format(avg_iou))
+        with open('kmeans_result.txt', 'a') as f:
+            for i, centroid in enumerate(centroids):
+                f.write("k-means aspect result {}: {} ".format(i, centroid.w / centroid.h))
+            f.write("avg_iou {}\n".format(avg_iou))
 
         w = [math.atan(box.w/box.h) for box in boxes]
         h = [1 for _ in boxes]
