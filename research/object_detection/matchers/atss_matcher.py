@@ -111,7 +111,7 @@ class AtssMatcher(matcher.Matcher):
       begin_index = tf.cast(0, tf.int32)
       # pick k candidates from each level by minimum distance.
       if len(anchor_level_indices) != len(self._number_sample_per_level_per_anchor_on_loc):
-        number_sample_per_level_per_anchor_on_loc_list = self._number_sample_per_level_per_anchor_on_loc[0] * len(anchor_level_indices)
+        number_sample_per_level_per_anchor_on_loc_list = [self._number_sample_per_level_per_anchor_on_loc[0] for _ in range(len(anchor_level_indices))]
       else:
         number_sample_per_level_per_anchor_on_loc_list = self._number_sample_per_level_per_anchor_on_loc
 
