@@ -1099,14 +1099,20 @@ class SSDMetaArch(model.DetectionModel):
                                          normalizer), classification_loss,
                                         name='classification_loss')
 
+      loss_dict = {}
+
       if self.enable_task_independent_uncertainty_training:
+        loss_dict.update({
+          'Summary/localization_loss': localization_loss,
+          'Summary/classification_loss': classification_loss,
+        })
         classification_loss = 0.5 * (tf.math.exp(-1 * self.trainable_weight_classification) * classification_loss + self.trainable_weight_classification)
         localization_loss = 0.5 * (tf.math.exp(-1 * self.trainable_weight_localization) * localization_loss + self.trainable_weight_localization)
 
-      loss_dict = {
+      loss_dict.update({
         'Loss/localization_loss': localization_loss,
         'Loss/classification_loss': classification_loss,
-      }
+      })
 
       if self._sub_classification_loss is not None:
         sub_classification_loss = tf.multiply((self._sub_classification_loss_weight /
@@ -1114,6 +1120,9 @@ class SSDMetaArch(model.DetectionModel):
                                               name='sub_classification_loss')
 
         if self.enable_task_independent_uncertainty_training:
+          loss_dict.update({
+            'Summary/sub_classification_loss': sub_classification_loss,
+          })
           sub_classification_loss = 0.5 * (tf.math.exp(-1 * self.trainable_weight_sub_classification) * sub_classification_loss + self.trainable_weight_sub_classification)
 
         loss_dict.update({
@@ -1136,6 +1145,9 @@ class SSDMetaArch(model.DetectionModel):
         embedding_classification_losses = tf.multiply((self._embedding_classification_loss_weight / track_id_normalizer), embedding_classification_losses, name='embedding_classification_losses')
 
         if self.enable_task_independent_uncertainty_training:
+          loss_dict.update({
+            'Summary/embedding_classification_losses': embedding_classification_losses,
+          })
           embedding_classification_losses = 0.5 * (tf.math.exp(-1 * self.trainable_weight_embedding) * embedding_classification_losses + self.trainable_weight_embedding)
 
         loss_dict.update({

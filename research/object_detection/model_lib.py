@@ -564,6 +564,8 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
         for key, value in others_from_loss.items():
           if key.startswith('Weight/task_independent_uncertainty'):
             tf.summary.scalar(key, value)
+          elif key.startswith('Summary'):
+            tf.summary.scalar(key, value)
 
         losses_dict = dict((key, value) for key, value in losses_dict.items() if key not in others_from_loss)
 
@@ -895,8 +897,9 @@ def create_estimator_and_inputs(run_config,
   if train_steps is None and train_config.num_steps != 0:
     train_steps = train_config.num_steps
 
-  group_total_ids = inputs.create_track_group_id_start(train_input_config.track_group_id_lookup, tensor=False)['total']
-  model_config.ssd.num_track_identities = group_total_ids
+  if train_input_config.track_group_id_lookup:
+    group_total_ids = inputs.create_track_group_id_start(train_input_config.track_group_id_lookup, tensor=False)['total']
+    model_config.ssd.num_track_identities = group_total_ids
 
   detection_model_fn = functools.partial(
       detection_model_fn_base, model_config=model_config)
