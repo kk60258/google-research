@@ -1,7 +1,8 @@
-export PATH_TO_BE_CONFIGURED=/tempssd/people_detection2/model_062217_viveland_v2_gpu_sigmoid_no_freeze_5k_vv4
-export CONFIG_FILE=${PATH_TO_BE_CONFIGURED}/no_freeze_5k_vv4.config
-export CHECKPOINT_PATH=${PATH_TO_BE_CONFIGURED}/model.ckpt-5000
+export PATH_TO_BE_CONFIGURED=/tempssd/people_detection2/model_082018_track_ciou_emb128_only_mot
+export CONFIG_FILE=${PATH_TO_BE_CONFIGURED}/ssdlite_mobiledet_dsp_300x300_track_person_ciou_emb128_only_mot.config
+export CHECKPOINT_PATH=${PATH_TO_BE_CONFIGURED}/model.ckpt-20000
 export OUTPUT_DIR=${PATH_TO_BE_CONFIGURED}/tflite
+export OUTPUT_DIR_WO_NMS=${PATH_TO_BE_CONFIGURED}/tflite_no_nms
 
 python3 object_detection/export_tflite_ssd_graph.py \
 --pipeline_config_path=$CONFIG_FILE \
@@ -23,6 +24,12 @@ tflite_convert --output_file=$OUTPUT_DIR/012218_with_nms_detections100.tflite  \
  --output_arrays='TFLite_Detection_PostProcess','TFLite_Detection_PostProcess:1','TFLite_Detection_PostProcess:2','TFLite_Detection_PostProcess:3' \
  --input_shapes=1,300,300,3 --allow_custom_ops
 
+tflite_convert --output_file=$OUTPUT_DIR/061512_v2.tflite  \
+ --graph_def_file=$OUTPUT_DIR/tflite_graph.pb \
+ --input_arrays=normalized_input_image_tensor \
+ --output_arrays='TFLite_Detection_PostProcess','TFLite_Detection_PostProcess:1','TFLite_Detection_PostProcess:2','TFLite_Detection_PostProcess:3' \
+ --input_shapes=1,300,300,3 --allow_custom_ops
+ 
 ##no nms 
 python3 object_detection/export_tflite_ssd_graph.py \
 --pipeline_config_path=$CONFIG_FILE \
@@ -34,7 +41,18 @@ tflite_convert --output_file=$OUTPUT_DIR/031215_iwamura_no_nms.tflite  \
  --input_arrays=normalized_input_image_tensor \
  --output_arrays='raw_outputs/box_encodings','raw_outputs/class_predictions','anchors' \
  --input_shapes=1,300,300,3 --allow_custom_ops
-           
+
+python3 object_detection/export_tflite_ssd_graph.py \
+--pipeline_config_path=$CONFIG_FILE \
+--trained_checkpoint_prefix=$CHECKPOINT_PATH \
+--output_directory=$OUTPUT_DIR_WO_NMS \
+--add_postprocessing_op=false ;\
+tflite_convert --output_file=$OUTPUT_DIR_WO_NMS/061512_v2_no_nms.tflite  \
+ --graph_def_file=$OUTPUT_DIR_WO_NMS/tflite_graph.pb \
+ --input_arrays=normalized_input_image_tensor \
+ --output_arrays='raw_outputs/box_encodings','raw_outputs/class_predictions','anchors' \
+ --input_shapes=1,300,300,3 --allow_custom_ops
+            
 python3 object_detection/export_inference_graph.py \
 --input_type=image_tensor \
 --pipeline_config_path=$CONFIG_FILE \

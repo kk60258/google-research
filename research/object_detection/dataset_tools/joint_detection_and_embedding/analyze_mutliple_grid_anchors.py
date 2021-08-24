@@ -2,7 +2,16 @@ import numpy as np
 import math
 from object_detection.dataset_tools.utils.avg_iou import avg_iou
 
-def analyze_ssd_anchors(scales, aspects, reduce_boxes_in_lowest_layer=True, interpolated_scale_aspect_ratio=1.0):
+def analyze_ssd_anchors(bboxes, scales, aspects, reduce_boxes_in_lowest_layer=True, interpolated_scale_aspect_ratio=1.0):
+  '''
+
+  :param bboxes: [0, 0, width, height]
+  :param scales:
+  :param aspects:
+  :param reduce_boxes_in_lowest_layer:
+  :param interpolated_scale_aspect_ratio:
+  :return:
+  '''
   anchors = []
 
   def scale_to_aspect(scale, aspect):
@@ -29,7 +38,40 @@ def analyze_ssd_anchors(scales, aspects, reduce_boxes_in_lowest_layer=True, inte
         anchors.append([0, 0, width, height])
   anchors = np.array(anchors)
   iou = avg_iou(bboxes, anchors)
+  print('num of anchors {}'.format(len(anchors)))
   print('avg iou {}'.format(iou))
+  return iou
+
+def analyze_grid_anchors(bboxes, scales, aspects):
+  '''
+
+  :param bboxes: [0, 0, width, height]
+  :param scales:
+  :param aspects:
+  :param reduce_boxes_in_lowest_layer:
+  :param interpolated_scale_aspect_ratio:
+  :return:
+  '''
+  anchors = []
+
+  def scale_to_aspect(scale, aspect):
+    ratio_sqrts = np.sqrt(aspect)
+    height = scale / ratio_sqrts
+    width = scale * ratio_sqrts
+    return width, height
+
+  scales_grid, aspects_grid = np.meshgrid(scales, aspects)
+
+  for scale in scales:
+    for aspect in aspects:
+      width, height = scale_to_aspect(scale, aspect)
+      anchors.append([0, 0, width, height])
+
+  anchors = np.array(anchors)
+  iou = avg_iou(bboxes, anchors)
+  print('num of anchors {}'.format(len(anchors)))
+  print('avg iou {}'.format(iou))
+  return iou
 
 if __name__ == '__main__':
   # xcenter, ycenter, width, height
@@ -70,7 +112,7 @@ if __name__ == '__main__':
   scales = sorted(scales)
 
   aspects = [1.0, 1.0/2, 2.0, 1.0/3, 3.0]
-  analyze_ssd_anchors(scales, aspects)
+  analyze_ssd_anchors(bboxes, scales, aspects)
 
 
 

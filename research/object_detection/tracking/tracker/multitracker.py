@@ -175,7 +175,7 @@ class JDETracker(object):
         ----------
         pred_bboxes : list of ndarray with shape [N, 4]
         pred_scores : list of ndarray with shape [N]
-        pred_embeddings : list of ndarray with shape [N, 128]
+        pred_embeddings : list of ndarray with shape [N, D]. D is the dimension of embedding space.
 
         im_blob : torch.float32
                   Tensor of shape depending upon the size of image. By default, shape of this tensor is [1, 3, 608, 1088]
@@ -230,6 +230,7 @@ class JDETracker(object):
         dists = matching.fuse_motion(self.kalman_filter, dists, strack_pool, detections)
         # The dists is the list of distances of the detection with the tracks in strack_pool
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.7)
+        print('num of embedding+motion matches {}, u_track {}, u_detection {}'.format(len(matches), len(u_track), len(u_detection)))
         # The matches is the array for corresponding matches of the detection with the corresponding strack_pool
 
         for itracked, idet in matches:
@@ -257,6 +258,7 @@ class JDETracker(object):
         dists = matching.iou_distance(r_tracked_stracks, detections)
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.5)
         # matches is the list of detections which matched with corresponding tracks by IOU distance method
+        print('num of iou matches {}, u_track {}, u_detection {}'.format(len(matches), len(u_track), len(u_detection)))
         for itracked, idet in matches:
             track = r_tracked_stracks[itracked]
             det = detections[idet]

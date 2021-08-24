@@ -175,5 +175,9 @@ BBox-Label-Tool/Examples/*
 
 #configs
 object_detection/samples/
+export_command_example.txt
+object_detection/dataset_tools/joint_detection_and_embedding/*.txt
+object_detection/dataset_tools/joint_detection_and_embedding/*.h5
+
 
 

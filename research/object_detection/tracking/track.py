@@ -127,9 +127,14 @@ def main(opt, data_root='/data/MOT16/train', seqs=('MOT16-05',), exp_name='demo'
 
         logger.info('start seq: {}'.format(seq))
         images = sorted(glob.glob(osp.join(data_root, seq, 'img1', '*.jpg')))
+        # images = sorted(glob.glob(osp.join(data_root, seq, '*.jpg')))
         result_filename = os.path.join(result_root, '{}.txt'.format(seq))
-        meta_info = open(os.path.join(data_root, seq, 'seqinfo.ini')).read()
-        frame_rate = int(meta_info[meta_info.find('frameRate')+10:meta_info.find('\nseqLength')])
+        seqinfo = os.path.join(data_root, seq, 'seqinfo.ini')
+        if os.path.exists(seqinfo):
+            meta_info = open(seqinfo).read()
+            frame_rate = int(meta_info[meta_info.find('frameRate')+10:meta_info.find('\nseqLength')])
+        else:
+            frame_rate = 30
         nf, ta, tc = eval_seq(opt, images, result_filename, data_type=data_type,
                               save_dir=output_dir, show_image=show_image, frame_rate=frame_rate)
         n_frame += nf
@@ -185,6 +190,7 @@ def parse_args(args=None):
     parser.add_argument('--test-mot16', action='store_true', help='tracking buffer')
     parser.add_argument('--save-images', action='store_true', help='save tracking results (image)')
     parser.add_argument('--save-videos', action='store_true', help='save tracking results (video)')
+    parser.add_argument('--seqs', default='', type=str)
     return parser.parse_args(args)
 
 if __name__ == '__main__':
@@ -192,29 +198,35 @@ if __name__ == '__main__':
     opt = parse_args()
     print(opt, end='\n\n')
 
-    if not opt.test_mot16:
-        seqs_str = '''MOT17-02-SDP
-                      MOT17-04-SDP
-                      MOT17-05-SDP
-                      MOT17-09-SDP
-                      MOT17-10-SDP
-                      MOT17-11-SDP
-                      MOT17-13-SDP
-                    '''
-        # seqs_str = '''MOT17-02-SDP
-        #             '''
-        # data_root = '/home/wangzd/datasets/MOT/MOT17/images/train'
+    if not opt.seqs:
+        if not opt.test_mot16:
+            # seqs_str = '''MOT17-02-SDP
+            #               MOT17-04-SDP
+            #               MOT17-05-SDP
+            #               MOT17-09-SDP
+            #               MOT17-10-SDP
+            #               MOT17-11-SDP
+            #               MOT17-13-SDP
+            #             '''
+            seqs_str = '''MOT17-04-SDP
+                        '''
+            # data_root = '/home/wangzd/datasets/MOT/MOT17/images/train'
+        else:
+            seqs_str = '''MOT16-01
+                         MOT16-03
+                         MOT16-06
+                         MOT16-07
+                         MOT16-08
+                         MOT16-12
+                         MOT16-14'''
+            # data_root = '/home/wangzd/datasets/MOT/MOT16/images/test'
+        seqs = [seq.strip() for seq in seqs_str.split()]
+        imgs = [os.path.join(seq.strip(), 'img1') for seq in seqs_str.split()]
     else:
-        seqs_str = '''MOT16-01
-                     MOT16-03
-                     MOT16-06
-                     MOT16-07
-                     MOT16-08
-                     MOT16-12
-                     MOT16-14'''
-        # data_root = '/home/wangzd/datasets/MOT/MOT16/images/test'
+        seqs = opt.seqs.split(',')
+
     data_root = opt.mot_data_root
-    seqs = [seq.strip() for seq in seqs_str.split()]
+
 
     main(opt,
          data_root=data_root,

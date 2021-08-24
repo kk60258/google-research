@@ -99,8 +99,13 @@ def main():
     logging.log(logging.WARN, "annotation counter {}".format(bboxes.shape))
 
     if args.cluster == 'kmeans':
-        compute_centroids(bboxes, k=6, iterations_num=100, metric=args.metric)
-        # compute_centroids(bboxes, k=3, iterations_num=100, metric='aspect')
+        # compute_centroids(bboxes, k=4, iterations_num=100, metric=args.metric)
+        # for k in range(2, 7):
+        #     compute_centroids(bboxes, k=k, iterations_num=100, metric='aspect')
+
+        for k in range(6, 7):
+            compute_centroids(bboxes, k=k, iterations_num=100, metric='iou')
+
     elif args.cluster == 'dbscan':
         dbscan(bboxes, eps=0.3, min_samples=max(10, int(len(bboxes)*0.1)), metric=args.metric)
 

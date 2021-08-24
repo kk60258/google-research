@@ -227,7 +227,7 @@ def compute_centroids(bboxes, k, loss_convergence=1e-6, iterations_num=100, plus
     while (True):
         centroids, groups, loss = do_kmeans(k, boxes, centroids, metric)
         iterations = iterations + 1
-        print("loss = %f" % loss)
+        print("%d loss = %f" % (iterations, loss))
         if abs(old_loss - loss) < loss_convergence or iterations > iterations_num:
             break
         old_loss = loss
@@ -243,8 +243,9 @@ def compute_centroids(bboxes, k, loss_convergence=1e-6, iterations_num=100, plus
 
         with open('kmeans_result.txt', 'a') as f:
             for i, centroid in enumerate(centroids):
-                f.write("k-means iou result {}: {} ".format(i, centroid.w / centroid.h))
+                f.write("k-means iou result {}: w {}, h {}, ratio {}, scale {}\n".format(i, centroid.w, centroid.h, centroid.w/centroid.h, math.sqrt(centroid.w * centroid.h)))
             f.write("avg_iou {}\n".format(avg_iou))
+            f.write("{}\n".format('-'*50))
 
         w = [box.w for box in boxes]
         h = [box.h for box in boxes]
@@ -256,13 +257,14 @@ def compute_centroids(bboxes, k, loss_convergence=1e-6, iterations_num=100, plus
         centroids = sorted(centroids, key=lambda c: c.w)
         avg_iou = box_avg_iou(boxes, centroids)
         for i, centroid in enumerate(centroids):
-            print("k-means result {}:".format(i))
+            print("k-means aspect result {}:".format(i))
             print(centroid.w / centroid.h)
         print("avg_iou {}:".format(avg_iou))
         with open('kmeans_result.txt', 'a') as f:
             for i, centroid in enumerate(centroids):
-                f.write("k-means aspect result {}: {} ".format(i, centroid.w / centroid.h))
+                f.write("k-means aspect result {}: {}\n".format(i, centroid.w / centroid.h))
             f.write("avg_iou {}\n".format(avg_iou))
+            f.write("{}\n".format('-'*50))
 
         w = [math.atan(box.w/box.h) for box in boxes]
         h = [1 for _ in boxes]

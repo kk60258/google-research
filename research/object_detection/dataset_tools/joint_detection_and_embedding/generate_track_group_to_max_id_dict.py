@@ -15,13 +15,13 @@ parse tfrecord
 try dict loop up by tensor key
 '''
 
-# input_files = ["/tempssd/people_detection2/dataset/Caltech/*tfrecord*"]
-input_files = ["/tempssd/people_detection2/dataset/MOT17/*tfrecord*",
-               "/tempssd/people_detection2/dataset/ETHZ/*tfrecord*",
-               "/tempssd/people_detection2/dataset/PRW/*tfrecord*",
-               "/tempssd/people_detection2/dataset/CUHK-SYSU/*tfrecord*",
-               "/tempssd/people_detection2/dataset/Citypersons/*tfrecord*",
-               "/tempssd/people_detection2/dataset/Caltech/*tfrecord*"]
+input_files = ["/tempssd/people_detection2/dataset/MOT17/*tfrecord*"]
+# input_files = ["/tempssd/people_detection2/dataset/MOT17/*tfrecord*",
+#                "/tempssd/people_detection2/dataset/ETHZ/*tfrecord*",
+#                "/tempssd/people_detection2/dataset/PRW/*tfrecord*",
+#                "/tempssd/people_detection2/dataset/CUHK-SYSU/*tfrecord*",
+#                "/tempssd/people_detection2/dataset/Citypersons/*tfrecord*",
+#                "/tempssd/people_detection2/dataset/Caltech/*tfrecord*"]
 
 with tf.Session() as sess:
   def get_int_list_value_from_feature(feature, key):
@@ -53,8 +53,8 @@ with tf.Session() as sess:
         # print('-'*10)
         # print('{} {} {}'.format(track_group, local_max_track_label, image_name))
 
-        if image_name in total_images_set:
-          print('duplicate {}, group {}'.format(image_name, track_group))
+        # if image_name in total_images_set:
+        #   print('duplicate {}, group {}'.format(image_name, track_group))
         total_images_set.add(image_name)
         total_images_list.append(image_name)
         total_images += 1
@@ -85,7 +85,7 @@ with tf.Session() as sess:
   for k, v in track_group_to_max_id_dict.items():
     print(k, v)
   print('-'*10)
-  with open('track_group_to_max_id_dict.json', 'w') as f:
+  with open('track_group_to_max_id_dict_only_mot.json', 'w') as f:
     f.write(json.dumps(track_group_to_max_id_dict))
 
   id_start = {}

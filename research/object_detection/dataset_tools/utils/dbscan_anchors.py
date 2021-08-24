@@ -39,7 +39,7 @@ def dbscan(bboxes, eps, min_samples, metric='iou'):
         distance_fn = 'euclidean'
 
     # clustering = DBSCAN(eps=eps, min_samples=min_samples, metric=distance_fn).fit(bboxes)
-    clustering = OPTICS(min_samples=2).fit(bboxes)
+    clustering = OPTICS(min_samples=min_samples).fit(bboxes)
     print(clustering.labels_)
     num_group = max(clustering.labels_) + 1
     groups = []
