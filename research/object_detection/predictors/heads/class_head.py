@@ -286,7 +286,9 @@ class ConvolutionalClassHead(head.Head):
           scope=self._scope + '_extension_{}'.format(i),
           biases_initializer=tf.constant_initializer(
             self._class_prediction_bias_init))
-      class_predictions_with_background = tf.add(class_predictions_with_background, shortcut, self._scope + '_extension_add{}'.format(i))
+
+      if self._use_residual:
+        class_predictions_with_background = tf.add(class_predictions_with_background, shortcut, self._scope + '_extension_add{}'.format(i))
 
     if self._apply_sigmoid_to_scores:
       class_predictions_with_background = tf.sigmoid(
