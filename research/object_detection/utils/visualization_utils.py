@@ -709,6 +709,12 @@ def draw_side_by_side_evaluation_image(eval_dict,
         groundtruth_keypoint_scores = tf.cast(
             keypoint_ops.set_keypoint_visibilities(
                 groundtruth_keypoints), dtype=tf.float32)
+
+    track_id_detect = None
+    if detection_fields.detection_track_id in eval_dict:
+      track_id_detect = tf.expand_dims(
+        eval_dict[detection_fields.detection_track_id][indx], axis=0)
+
     images_with_detections = draw_bounding_boxes_on_image_tensors(
         tf.expand_dims(
             eval_dict[input_data_fields.original_image][indx], axis=0),
@@ -731,10 +737,15 @@ def draw_side_by_side_evaluation_image(eval_dict,
         max_boxes_to_draw=max_boxes_to_draw,
         min_score_thresh=min_score_thresh,
         use_normalized_coordinates=use_normalized_coordinates,
-        track_ids=tf.expand_dims(
-          eval_dict[detection_fields.detection_track_id][indx], axis=0),
+        track_ids=track_id_detect,
         skip_labels=skip_labels)
     num_gt_boxes_i = num_gt_boxes[indx]
+
+    track_id_gt = None
+    if input_data_fields.groundtruth_track_ids in eval_dict:
+      track_id_gt = tf.expand_dims(
+        eval_dict[input_data_fields.groundtruth_track_ids][indx][:num_gt_boxes_i], axis=0)
+
     images_with_groundtruth = draw_bounding_boxes_on_image_tensors(
         tf.expand_dims(
             eval_dict[input_data_fields.original_image][indx],
@@ -766,8 +777,7 @@ def draw_side_by_side_evaluation_image(eval_dict,
         max_boxes_to_draw=None,
         min_score_thresh=0.0,
         use_normalized_coordinates=use_normalized_coordinates,
-        track_ids=tf.expand_dims(
-          eval_dict[input_data_fields.groundtruth_track_ids][indx][:num_gt_boxes_i], axis=0),
+        track_ids=track_id_gt,
         skip_labels=skip_labels)
     images_to_visualize = tf.concat([images_with_detections,
                                      images_with_groundtruth], axis=2)
