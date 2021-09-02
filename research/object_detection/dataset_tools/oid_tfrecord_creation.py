@@ -112,4 +112,9 @@ def tf_example_from_annotations_data_frame(annotations_data_frame, label_map,
                     six.ensure_binary(label_text) for label_text in
                     filtered_data_frame_labels.LabelName.to_numpy()
                 ]),
+
+  if 'InstanceID' in filtered_data_frame_labels.columns:
+    feature_map[standard_fields.TfExampleFields.object_track_label] = \
+      dataset_util.int64_list_feature(filtered_data_frame_labels['InstanceID'].to_numpy()),
+
   return tf.train.Example(features=tf.train.Features(feature=feature_map))

@@ -1,178 +1,149 @@
-'''
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
-copy from fall detection code base: tfrecord_coco_gym_shard.py
-'''
-import tensorflow as tf
-import os, io
+import os
+
+import contextlib2
+import tensorflow.compat.v1 as tf
+import pandas as pd
+from object_detection.dataset_tools import oid_tfrecord_creation
+from object_detection.dataset_tools import tf_record_creation_util
+from object_detection.utils import label_map_util
+
+import six
+
+from object_detection.core import standard_fields
 from object_detection.utils import dataset_util
-from PIL import Image
 import cv2
-import numpy as np
-flags = tf.app.flags
-# flags.DEFINE_string('output_path', '/tempssd/people_detection/0908_people_detection_test_frame_diff_additional.record', 'Path to output TFRecord')
-flags.DEFINE_string('output_dir', '/tempssd/people_detection/', '')
-flags.DEFINE_string('output_name', '0803_coco_people_detection_train', 'Path to output TFRecord')
-FLAGS = flags.FLAGS
 
-# path = '/home/paul_huang/HTC_AI/code_base/coco/train_person_images_1'
-path = '/tempssd/people_detection/0803_train/img600x600'
-# path = '/home/jason/Downloads/HumanFallDetectionDataset/multi_camera_pick/'
-# path = '/tempssd/people_detection/people_testing_0721/img'
-def create_tf_example(filename, image, width, height, xmins, ymins, xmaxs, ymaxs, total_instance):
-    # TODO(user): Populate the following variables from your example.
-    total_instance = int(total_instance)
-    image_format = b'jpg'
-    if total_instance == 1:
-        classes_text = [b'people'] # List of string class name of bounding box (1 per box)
-        classes = [1] # List of integer class id of bounding box (1 per box)
-    else:
-        classes_text = [b'people']
-        classes = [1]
-        for i in range(0, total_instance - 1):
-            classes_text.append(b'people')
-            classes.append(1)
-    filename = tf.compat.as_bytes(filename)
+tf.flags.DEFINE_string('image_dir', 'images', '')
+tf.flags.DEFINE_string('label', 'label.csv', '')
+tf.flags.DEFINE_integer('num_shards', 1, 'Number of TFRecord shards')
+tf.flags.DEFINE_integer('image_size', 300, '')
+tf.flags.DEFINE_string(
+    'output_tf_record_path_prefix', '/tempssd/people_detection2/dataset/MOT17/',
+    'Path to the output TFRecord. The shard index and the number of shards '
+    'will be appended for each output shard.')
 
-    tf_example = tf.train.Example(features=tf.train.Features(feature={
-        'image/height': dataset_util.int64_feature(height),
-        'image/width': dataset_util.int64_feature(width),
-        'image/filename': dataset_util.bytes_feature(filename),
-        'image/source_id': dataset_util.bytes_feature(filename),
-        'image/encoded': dataset_util.bytes_feature(image),
-        'image/format': dataset_util.bytes_feature(image_format),
-        'image/object/bbox/xmin': dataset_util.float_list_feature(xmins),
-        'image/object/bbox/xmax': dataset_util.float_list_feature(xmaxs),
-        'image/object/bbox/ymin': dataset_util.float_list_feature(ymins),
-        'image/object/bbox/ymax': dataset_util.float_list_feature(ymaxs),
-        'image/object/class/text': dataset_util.bytes_list_feature(classes_text),
-        'image/object/class/label': dataset_util.int64_list_feature(classes),
-    }))
-    return tf_example
+FLAGS = tf.flags.FLAGS
+
+def get_all_files(parent, img_collection=[], label_collection=[], extension='.txt'):
+    for f in os.listdir(parent):
+        child = os.path.join(parent, f)
+        if os.path.isdir(child):
+            get_all_files(child)
+        elif f.endswith(extension):
+            image_check_dir = parent.replace('labels_with_ids', 'images')
+            if os.path.exists(os.path.join(image_check_dir, f.replace('.txt', '.jpg'))):
+                img_collection.append(os.path.join(image_check_dir, f.replace('.txt', '.jpg')))
+                label_collection.append(child)
+            elif os.path.exists(os.path.join(image_check_dir, f.replace('.txt', '.png'))):
+                img_collection.append(os.path.join(image_check_dir, f.replace('.txt', '.png')))
+                label_collection.append(child)
+    return img_collection, label_collection
 
 
 def main(_):
-    shard_count = 0
-    total_shard = 100
-    amount_per_shard = 5000
-    if not os.path.exists(FLAGS.output_dir):
-        os.makedirs(FLAGS.output_dir)
+    tf.logging.set_verbosity(tf.logging.INFO)
 
-    writer = tf.python_io.TFRecordWriter(os.path.join(FLAGS.output_dir, FLAGS.output_name + '_%.5d-of-%.5d' % (shard_count, total_shard) + '.record'))
-    # TODO(user): Write code to read in your dataset to examples variable
-    # with open('/tempssd/people_detection/people_training_coco_multi_0803.csv', 'r') as fp:
-    with open('/tempssd/people_detection/people_training_coco_multi_0803_without_any_test.csv', 'r') as fp:
-    # with open('/tempssd/people_detection/people_testing_0721.csv', 'r') as fp:
-    # with open('/home/jason/Downloads/HumanFallDetectionDataset/merged_0701_total.csv', 'r') as fp:
-    # with open('/home/jason/hic/HumanFallModel/fall_training/merged_0701_total.csv', 'r') as fp:
-        all_lines = fp.readlines()
-    xmins = []
-    ymins = []
-    xmaxs = []
-    ymaxs = []
-    total_images = 0
-    delete_instance = 0
-    last_filename = None
-    image = None
-    # name_set = set()
-    for id, lines in enumerate(all_lines):
-        filename = lines.strip().split(",")[0].split("/")[-1]
-        if '000000' in filename:
-            print(filename)
-            continue
+    required_flags = [
+        'label'
+    ]
+    for flag_name in required_flags:
+        if not getattr(FLAGS, flag_name):
+            raise ValueError('Flag --{} is required'.format(flag_name))
 
-        if 'multi_camera_pick' in path:
-            if 'chute' not in filename:
-                print(filename)
+
+    label_pbtxt_path = os.path.join('object_detection', 'data', 'oid_bbox_people_label_map.pbtxt')
+    print(label_pbtxt_path)
+
+    label_map = label_map_util.get_label_map_dict(label_pbtxt_path)
+
+    with contextlib2.ExitStack() as tf_record_close_stack:
+        output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(
+            tf_record_close_stack, FLAGS.output_tf_record_path_prefix,
+            FLAGS.num_shards)
+        image_counter = 0
+        annotation_counter = 0
+        max_instance_id = 0
+        labels = pd.read_csv(FLAGS.label, names=['image_id', 'fall', 'width', 'height', 'which', 'total', 'xmin', 'ymin', 'xmax', 'ymax'], header=None)
+        labels['xmin'].clip(lower=0.0, upper=1.0, inplace=True)
+        labels['xmax'].clip(lower=0.0, upper=1.0, inplace=True)
+        labels['ymin'].clip(lower=0.0, upper=1.0, inplace=True)
+        labels['ymax'].clip(lower=0.0, upper=1.0, inplace=True)
+
+        for counter, (image_id, annotaions) in enumerate(labels.groupby('image_id')):
+
+            image_path = os.path.join(FLAGS.image_dir, image_id)
+            if not os.path.exists(image_path):
                 continue
+            num_of_annotations = len(annotaions)
+            tf.logging.log_every_n(tf.logging.INFO, 'Processed %d images...', FLAGS.num_shards * 10, image_counter)
+            tf.logging.log(tf.logging.INFO, "image {} with labels {}".format(image_id, num_of_annotations))
 
-            parsed_filename = filename.split('_')
+            image = cv2.imread(image_path)
+            image_resize = cv2.resize(image, (FLAGS.image_size, FLAGS.image_size))
+            image_encode = cv2.imencode('.jpg', image_resize)[1]
+            source_id = image_path
+            tf_example = tf_example_from_annotations_data_frame(
+                annotaions, label_map, image_id, source_id, image_encode.tobytes())
 
-            level1_dir = 'pick' + parsed_filename[0][-2:]
-            level2_dir = parsed_filename[1]
-            new_path = os.path.join(path, level1_dir, level2_dir)
-        else:
-            new_path = path
-        # name_set.add(filename)
-        # if len(name_set) % 1000 > 5:
-        #     continue
-
-        full_filename = os.path.join(new_path, '{}'.format(filename))
-
-        if not os.path.exists(full_filename):
-            print("not find {}".format(full_filename))
-            continue
-
-        if last_filename != filename:
-            # write previous record
-            if image is not None:
-                tf_example = create_tf_example(last_filename, encode_image, image.shape[1], image.shape[0], xmins, ymins, xmaxs, ymaxs, len(xmins))
-                writer.write(tf_example.SerializeToString())
-                total_images = total_images + 1
-
-                if total_images % amount_per_shard == 0:
-                    writer.close()
-                    shard_count += 1
-                    writer = tf.python_io.TFRecordWriter(os.path.join(FLAGS.output_dir, FLAGS.output_name + '_%.5d-of-%.5d' % (shard_count, total_shard) + '.record'))
-
-            # if image is not None:
-            #     cv2.namedWindow(last_filename, cv2.WINDOW_NORMAL)
-            #     cv2.moveWindow(last_filename, 600, 100)
-            #     cv2.resizeWindow(last_filename, 600, 600)
-            #     for index in range(len(xmins)):
-            #         x1 = int(xmins[index] * image.shape[1])
-            #         x2 = int(xmaxs[index] * image.shape[1])
-            #         y1 = int(ymins[index] * image.shape[0])
-            #         y2 = int(ymaxs[index] * image.shape[0])
-            #         cv2.rectangle(image, (x1, y1), (x2, y2), color=(255, 0, 0), thickness=2)
-            #     cv2.imshow(last_filename, image)
-            #     key = cv2.waitKey(0)
-            #     if key == 27:
-            #         exit()
-            #     cv2.destroyWindow(last_filename)
-
-            xmins = []
-            ymins = []
-            xmaxs = []
-            ymaxs = []
-            delete_instance = 0
-            image = cv2.imread(full_filename)
-            image = cv2.resize(image, (300, 300), interpolation=cv2.INTER_NEAREST)
-            encode_image = cv2.imencode('.jpg', image)[1].tostring()
-            last_filename = filename
+            if tf_example:
+                if FLAGS.num_shards == 1:
+                    shard_idx = 0
+                else:
+                    shard_idx = int(counter) % FLAGS.num_shards
+                output_tfrecords[shard_idx].write(tf_example.SerializeToString())
+                image_counter += 1
+                annotation_counter += num_of_annotations
+        print('max instance id {}'.format(max_instance_id))
+        print("tfrecord image counter {}, annotation counter {}".format(image_counter, annotation_counter))
 
 
-        xmin = float(lines.strip().split(",")[6])
-        ymin = float(lines.strip().split(",")[7])
-        xmax = float(lines.strip().split(",")[8])
-        ymax = float(lines.strip().split(",")[9])
-        init_total_instance = int(lines.strip().split(",")[5])
-        which_instance = int(lines.strip().split(",")[4])
-        width = xmax - xmin
-        height = ymax - ymin
-        area = width * height
-        threshold = 1
+# /m/01g317	Person
+def tf_example_from_annotations_data_frame(df, label_map, image_name, source_id,
+                                           encoded_image, track_group=None):
+    feature_map = {
+        standard_fields.TfExampleFields.object_bbox_ymin:
+            dataset_util.float_list_feature(
+                df['ymin'].to_numpy()),
+        standard_fields.TfExampleFields.object_bbox_xmin:
+            dataset_util.float_list_feature(
+                df['xmin'].to_numpy()),
+        standard_fields.TfExampleFields.object_bbox_ymax:
+            dataset_util.float_list_feature(
+                df['ymax'].to_numpy()),
+        standard_fields.TfExampleFields.object_bbox_xmax:
+            dataset_util.float_list_feature(
+                df['xmax'].to_numpy()),
+        standard_fields.TfExampleFields.object_class_text:
+            dataset_util.bytes_list_feature([
+                six.ensure_binary('/m/01g317')
+                for _ in range(len(df))
+            ]),
+        standard_fields.TfExampleFields.object_class_label:
+            dataset_util.int64_list_feature([
+                label_map['/m/01g317']
+                for _ in range(len(df))
+            ]),
+        standard_fields.TfExampleFields.filename:
+            dataset_util.bytes_feature(
+                six.ensure_binary(image_name)),
+        standard_fields.TfExampleFields.source_id:
+            dataset_util.bytes_feature(six.ensure_binary(source_id)),
+        standard_fields.TfExampleFields.image_encoded:
+            dataset_util.bytes_feature(six.ensure_binary(encoded_image)),
+    }
 
-        #cv2.rectangle(frame_sub, (x1, y1), (x2, y2), color=(255, 0, 0), thickness=2)
-        #print("{}, num {}, valid pixel {}, total pixel {}".format(filename, len(xmins), bbox_valid_count, (y2 - y1) * (x2 - x1)))
-        if area <= threshold:
-            xmins.append(xmin)
-            ymins.append(ymin)
-            xmaxs.append(xmax)
-            ymaxs.append(ymax)
-        else:
-            delete_instance = delete_instance + 1
+    if 'instance_id' in df.columns:
+        feature_map[standard_fields.TfExampleFields.object_track_label] = dataset_util.int64_list_feature(df['instance_id'].to_numpy())
 
+    if track_group is not None:
+        feature_map[standard_fields.TfExampleFields.object_track_group] = dataset_util.bytes_feature(six.ensure_binary(track_group))
 
-    #final image
-    # tf_example = create_tf_example(last_filename, encode_image, additional_encode_image, image.shape[1], image.shape[0], xmins, ymins, xmaxs, ymaxs, len(xmins))
-    # writer.write(tf_example.SerializeToString())
-    # total_images = total_images + 1
-    print("total_images", total_images)
+    return tf.train.Example(features=tf.train.Features(feature=feature_map))
 
-    writer.close()
-    for i in range(shard_count + 1):
-        os.rename(os.path.join(FLAGS.output_dir, FLAGS.output_name + '_%.5d-of-%.5d' % (i, total_shard) + '.record'),
-                  os.path.join(FLAGS.output_dir, FLAGS.output_name + '_%.5d-of-%.5d' % (i, shard_count) + '.record'))
 
 if __name__ == '__main__':
     tf.app.run()
