@@ -41,7 +41,7 @@ COLORS = [(0, 255, 0), (0, 0, 255), (255, 0, 0), (0, 255, 255), (255, 0, 255), (
 SIZE = 300
 
 # in sec
-DETECTION_CONFIDENCE_THRESHOLD = 0.5
+DETECTION_CONFIDENCE_THRESHOLD = 0.45
 PEOPLE_CLASS = 1
 
 
@@ -166,14 +166,17 @@ def main(argv):
     for p in image_source_dir:
         gointo_dir(p, image_file_names)                        
     sorted(image_file_names)
-    
-    output_dir = FLAGS.image_output_dir
-    pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
+
     output_oid = FLAGS.output_oid
-    if output_oid:
-        output_oid_dir = os.path.join(FLAGS.image_source_dir, 'oid')
-        pathlib.Path(output_oid_dir).mkdir(parents=True, exist_ok=True)
-        to_oid = ["ImageID,Source,LabelName,Confidence,XMin,XMax,YMin,YMax,IsOccluded,IsTruncated,IsGroupOf,IsDepiction,IsInside,Width,Height,InstanceID\n"]
+    output_oid_dir = FLAGS.image_source_dir
+    pathlib.Path(output_oid_dir).mkdir(parents=True, exist_ok=True)
+    to_oid = ["ImageID,Source,LabelName,Confidence,XMin,XMax,YMin,YMax,IsOccluded,IsTruncated,IsGroupOf,IsDepiction,IsInside,Width,Height,InstanceID\n"]
+
+    output_dir = None
+    if FLAGS.image_output_dir is not None:
+        output_dir = FLAGS.image_output_dir
+        pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
+
 
     for i, file in enumerate(image_file_names):
         total_now = time.time()
@@ -201,7 +204,7 @@ def main(argv):
                 image_id = os.path.basename(file)[:-4]
                 data = "{},htc,/m/01g317,1,{},{},{},{},0,0,0,0,0," \
                        "{},{},-1\n".format(
-                    image_id, box[0], box[1], box[2], box[3], width, height)
+                    image_id, box[0], box[2], box[1], box[3], width, height)
                 to_oid.append(data)
 
             box = box * [width, height, width, height]
