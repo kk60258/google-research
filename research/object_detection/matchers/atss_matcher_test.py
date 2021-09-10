@@ -48,7 +48,7 @@ class AtssMatcherTest(test_case.TestCase):
       feature_map_spatial_dims = tf.unstack(tf.cast(feature_map_spatial_dims, tf.int32), axis=0)
       gt_boxes = box_list.BoxList(tf.cast(gt_boxes, tf.float32))
       anchors = box_list.BoxList(tf.cast(anchors, tf.float32))
-      matcher = atss_matcher.AtssMatcher(use_matmul_gather=True, number_sample_per_level_per_anchor_on_loc=2)
+      matcher = atss_matcher.AtssMatcher(use_matmul_gather=True, number_sample_per_level_per_anchor_on_loc=[2])
       match = matcher.match(similarity_matrix, gt_boxes=gt_boxes, anchors=anchors, anchor_level_indices=anchor_level_indices, feature_map_spatial_dims=feature_map_spatial_dims)
       matched_cols = match.matched_column_indicator()
       unmatched_cols = match.unmatched_column_indicator()
@@ -97,7 +97,7 @@ class AtssMatcherTest(test_case.TestCase):
       feature_map_spatial_dims = tf.unstack(tf.cast(feature_map_spatial_dims, tf.int32), axis=0)
       gt_boxes = box_list.BoxList(tf.cast(gt_boxes, tf.float32))
       anchors = box_list.BoxList(tf.cast(anchors, tf.float32))
-      matcher = atss_matcher.AtssMatcher(use_matmul_gather=True, number_sample_per_level_per_anchor_on_loc=5)
+      matcher = atss_matcher.AtssMatcher(use_matmul_gather=True, number_sample_per_level_per_anchor_on_loc=[5])
       match = matcher.match(similarity_matrix, gt_boxes=gt_boxes, anchors=anchors, anchor_level_indices=anchor_level_indices, feature_map_spatial_dims=feature_map_spatial_dims)
       matched_cols = match.matched_column_indicator()
       unmatched_cols = match.unmatched_column_indicator()
@@ -137,5 +137,53 @@ class AtssMatcherTest(test_case.TestCase):
     self.assertAllEqual(np.nonzero(res_matched_cols)[0], expected_matched_column)
     self.assertFalse(np.all(res_unmatched_cols))
 
+  def test_return_correct_matches_single_match_fixed_threshold(self):
+
+    def graph_fn(similarity_matrix, gt_boxes, anchors, anchor_level_indices, feature_map_spatial_dims):
+      anchor_level_indices = tf.unstack(tf.cast(anchor_level_indices, tf.int32), axis=0)
+      feature_map_spatial_dims = tf.unstack(tf.cast(feature_map_spatial_dims, tf.int32), axis=0)
+      gt_boxes = box_list.BoxList(tf.cast(gt_boxes, tf.float32))
+      anchors = box_list.BoxList(tf.cast(anchors, tf.float32))
+      matcher = atss_matcher.AtssMatcher(use_matmul_gather=True, number_sample_per_level_per_anchor_on_loc=[2], fixed_iou_threshold=0.3)
+      match = matcher.match(similarity_matrix, gt_boxes=gt_boxes, anchors=anchors, anchor_level_indices=anchor_level_indices, feature_map_spatial_dims=feature_map_spatial_dims)
+      matched_cols = match.matched_column_indicator()
+      unmatched_cols = match.unmatched_column_indicator()
+      match_results = match.match_results
+      return (matched_cols, unmatched_cols, match_results)
+
+
+
+    def graph_similarity_cal(gt_boxes, anchors):
+      gt_boxes_list = box_list.BoxList(tf.cast(gt_boxes, dtype=tf.float32))
+      anchors_box_list = box_list.BoxList(tf.cast(anchors, dtype=tf.float32))
+      return similarity_calc.compare(gt_boxes_list, anchors_box_list)
+
+
+    similarity_calc = sim_calc.IouSimilarity()
+    gt_boxes = np.array([
+      [0.2, 0.2, 0.7, 0.4],
+      [0.4, 0.4, 0.8, 0.8]
+    ])
+
+    level1_anchors = self.gen_anchors(4)
+    level2_anchors = self.gen_anchors(3)
+
+    anchors = np.concatenate([level1_anchors, level2_anchors], axis=0)
+
+    anchor_level_indices = np.array([level1_anchors.shape[0], level2_anchors.shape[0]])
+    feature_map_spatial_dims = np.array([[3, 3], [2, 2]])
+
+    similarity = self.execute(graph_similarity_cal, [gt_boxes, anchors])
+
+    (res_matched_cols, res_unmatched_cols,
+     res_match_results) = self.execute(graph_fn, [similarity, gt_boxes, anchors, anchor_level_indices, feature_map_spatial_dims])
+
+    expected_matched_rows = np.array([1])
+    #matched to gt 1
+    self.assertAllEqual(res_match_results[res_matched_cols], expected_matched_rows)
+    #no.4 anchor matched
+    expected_matched_column = np.array([4])
+    self.assertAllEqual(np.nonzero(res_matched_cols)[0], expected_matched_column)
+    self.assertFalse(np.all(res_unmatched_cols))
 if __name__ == '__main__':
   tf.test.main()

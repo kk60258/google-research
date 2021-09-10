@@ -43,7 +43,8 @@ def build(matcher_config):
       matcher = matcher_config.atss_matcher
       return atss_matcher.AtssMatcher(
           use_matmul_gather=matcher.use_matmul_gather,
-          number_sample_per_level_per_anchor_on_loc=matcher.number_sample_per_level_per_anchor_on_loc)
+          number_sample_per_level_per_anchor_on_loc=matcher.number_sample_per_level_per_anchor_on_loc,
+          fixed_iou_threshold=matcher.fixed_iou_threshold)
   if matcher_config.WhichOneof('matcher_oneof') == 'argmax_matcher':
     matcher = matcher_config.argmax_matcher
     matched_threshold = unmatched_threshold = None

@@ -9,4 +9,5 @@ message AtssMatcher {
   // instead of standard tf.gather
   optional bool use_matmul_gather = 1 [default = false];
   repeated float number_sample_per_level_per_anchor_on_loc = 2;
+  optional float fixed_iou_threshold = 3 [default = -1];
 }
