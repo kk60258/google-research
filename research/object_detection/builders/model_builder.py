@@ -302,7 +302,7 @@ def _build_ssd_feature_extractor(feature_extractor_config,
         feature_extractor_config.conv_hyperparams)
   else:
     conv_hyperparams = hyperparams_builder.build(
-        feature_extractor_config.conv_hyperparams, is_training)
+        feature_extractor_config.conv_hyperparams, is_training and not freeze_batchnorm)
   override_base_feature_extractor_hyperparams = (
       feature_extractor_config.override_base_feature_extractor_hyperparams)
 
@@ -434,7 +434,7 @@ def _build_ssd_model(ssd_config, is_training, add_summaries):
   else:
     ssd_box_predictor = box_predictor_builder.build(
         hyperparams_builder.build, ssd_config.box_predictor, is_training,
-        num_classes, ssd_config.add_background_class, num_sub_classes=num_sub_classes, num_embedding=num_embedding, num_track_identities=num_track_identities)
+        num_classes, ssd_config.add_background_class, num_sub_classes=num_sub_classes, num_embedding=num_embedding, num_track_identities=num_track_identities, freeze_batchnorm=ssd_config.freeze_batchnorm)
   image_resizer_fn = image_resizer_builder.build(ssd_config.image_resizer)
   non_max_suppression_fn, score_conversion_fn = post_processing_builder.build(
       ssd_config.post_processing)

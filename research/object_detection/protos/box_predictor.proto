@@ -72,6 +72,10 @@ message ConvolutionalBoxPredictor {
   optional bool embedding_use_residual = 19[default = false];
   optional int32 embedding_residual_round = 20 [default = 0];
   optional int32 embedding_conv_round = 21 [default = 0];
+  // Hyperparameters for convolution ops used in the sub class box predictor.
+  optional Hyperparams conv_hyperparams_sub = 22;
+  // Hyperparameters for convolution ops used in the embedding box predictor.
+  optional Hyperparams conv_hyperparams_embedding = 23;
 }
 
 // Configuration proto for weight shared convolutional box predictor.

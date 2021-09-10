@@ -615,6 +615,9 @@ def create_model_fn(detection_model_fn, configs, hparams=None, use_tpu=False,
           include_patterns=include_variables,
           exclude_patterns=exclude_variables)
 
+      for v in trainable_variables:
+        print('trainable variables {}'.format(v))
+
       clip_gradients_value = None
       if train_config.gradient_clipping_by_norm > 0:
         clip_gradients_value = train_config.gradient_clipping_by_norm

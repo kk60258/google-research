@@ -58,7 +58,9 @@ def build_convolutional_box_predictor(is_training,
                                       embedding_use_residual=False,
                                       embedding_residual_round=0,
                                       embedding_conv_round=0,
-                                      num_track_identities=0):
+                                      num_track_identities=0,
+                                      conv_hyperparams_fn_sub=None,
+                                      conv_hyperparams_fn_embedding=None):
   """Builds the ConvolutionalBoxPredictor from the arguments.
 
   Args:
@@ -131,7 +133,8 @@ def build_convolutional_box_predictor(is_training,
       scope='SubClassPredictor',
       use_residual=sub_use_residual,
       residual_round=sub_residual_round,
-      conv_round=sub_conv_round)
+      conv_round=sub_conv_round,
+      conv_hyperparams_fn=conv_hyperparams_fn_sub)
     other_heads.update({'sub_class_predictions_with_background': sub_class_prediction_head})
 
   if num_embedding > 0:
@@ -147,7 +150,8 @@ def build_convolutional_box_predictor(is_training,
       scope='EmbeddingEncoder',
       use_residual=embedding_use_residual,
       residual_round=embedding_residual_round,
-      conv_round=embedding_conv_round)
+      conv_round=embedding_conv_round,
+      conv_hyperparams_fn=conv_hyperparams_fn_embedding)
 
     identity_predictor = class_head.FullyConnectedWrapClassHead(
       class_head=embedding_encoder_head,
@@ -710,7 +714,7 @@ BoxEncodingsClipRange = collections.namedtuple('BoxEncodingsClipRange',
 
 
 def build(argscope_fn, box_predictor_config, is_training, num_classes,
-          add_background_class=True, num_sub_classes=0, num_embedding=0, num_track_identities=0):
+          add_background_class=True, num_sub_classes=0, num_embedding=0, num_track_identities=0, freeze_batchnorm=False):
   """Builds box predictor based on the configuration.
 
   Builds box predictor based on the configuration. See box_predictor.proto for
@@ -742,7 +746,15 @@ def build(argscope_fn, box_predictor_config, is_training, num_classes,
   if  box_predictor_oneof == 'convolutional_box_predictor':
     config_box_predictor = box_predictor_config.convolutional_box_predictor
     conv_hyperparams_fn = argscope_fn(config_box_predictor.conv_hyperparams,
-                                      is_training)
+                                      is_training and not freeze_batchnorm)
+    conv_hyperparams_fn_sub = None
+    if hasattr(config_box_predictor, 'conv_hyperparams_sub'):
+      conv_hyperparams_fn_sub = argscope_fn(config_box_predictor.conv_hyperparams_sub,
+                                        is_training and not freeze_batchnorm)
+    conv_hyperparams_fn_embedding = None
+    if hasattr(config_box_predictor, 'conv_hyperparams_embedding'):
+      conv_hyperparams_fn_embedding = argscope_fn(config_box_predictor.conv_hyperparams_embedding,
+                                            is_training and not freeze_batchnorm)
     # Optionally apply clipping to box encodings, when box_encodings_clip_range
     # is set.
     box_encodings_clip_range = None
@@ -764,6 +776,8 @@ def build(argscope_fn, box_predictor_config, is_training, num_classes,
         num_classes=num_classes,
         add_background_class=add_background_class,
         conv_hyperparams_fn=conv_hyperparams_fn,
+        conv_hyperparams_fn_sub=conv_hyperparams_fn_sub,
+        conv_hyperparams_fn_embedding=conv_hyperparams_fn_embedding,
         use_dropout=config_box_predictor.use_dropout,
         dropout_keep_prob=config_box_predictor.dropout_keep_probability,
         box_code_size=config_box_predictor.box_code_size,
