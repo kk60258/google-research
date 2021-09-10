@@ -232,11 +232,18 @@ class JDETracker(object):
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.7)
         print('num of embedding+motion matches {}, u_track {}, u_detection {}'.format(len(matches), len(u_track), len(u_detection)))
         # The matches is the array for corresponding matches of the detection with the corresponding strack_pool
+        for i in u_track:
+            print('u_track id {}'.format(strack_pool[i].track_id))
+        for i in u_detection:
+            print('u_detection tlwh {}, score {}'.format(detections[i].tlwh, detections[i].score))
 
         for itracked, idet in matches:
             # itracked is the id of the track and idet is the detection
             track = strack_pool[itracked]
             det = detections[idet]
+            if track.track_id == 1:
+                print('det tlwh {}, score {} track id 1'.format(det.tlwh, det.score))
+
             if track.state == TrackState.Tracked:
                 # If the track is active, add the detection to the track
                 track.update(detections[idet], self.frame_id)
@@ -281,6 +288,7 @@ class JDETracker(object):
         detections = [detections[i] for i in u_detection]
         dists = matching.iou_distance(unconfirmed, detections)
         matches, u_unconfirmed, u_detection = matching.linear_assignment(dists, thresh=0.7)
+        print('num of iou matches of unconfirmed {}, u_unconfirmed {}, u_detection {}'.format(len(matches), len(u_unconfirmed), len(u_detection)))
         for itracked, idet in matches:
             unconfirmed[itracked].update(detections[idet], self.frame_id)
             activated_starcks.append(unconfirmed[itracked])
@@ -296,9 +304,11 @@ class JDETracker(object):
         for inew in u_detection:
             track = detections[inew]
             if track.score < self.new_track_thres:
+                print('lower score {} < new_track_thres {}'.format(track.score, self.new_track_thres))
                 continue
             track.activate(self.kalman_filter, self.frame_id)
             activated_starcks.append(track)
+            print('new track tlwh {}, score {}'.format(track.tlwh, track.score))
 
         """ Step 5: Update state"""
         # If the tracks are lost for more frames than the threshold number, the tracks are removed.

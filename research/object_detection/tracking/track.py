@@ -52,6 +52,8 @@ def eval_seq(opt, images, result_filename, save_dir=None, show_image=False, data
     # images = glob.glob(os.path.join(opt.image_dir, '*.jpg'))
 
     for frame_id, image_path in enumerate(images):
+        # if frame_id > 4:
+        #     exit()
         image = cv2.imread(image_path)
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if image_rgb.shape[0] != 300 or image_rgb.shape[1] != 300:
@@ -85,7 +87,8 @@ def eval_seq(opt, images, result_filename, save_dir=None, show_image=False, data
             if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
                 online_tlwhs.append(tlwh)
                 online_ids.append(tid)
-            print(tlwh, tid)
+            else:
+                print(tlwh, tid)
 
         # save results
         results.append((frame_id + 1, online_tlwhs, online_ids))
@@ -208,8 +211,10 @@ if __name__ == '__main__':
             #               MOT17-11-SDP
             #               MOT17-13-SDP
             #             '''
-            seqs_str = '''MOT17-04-SDP
-                        '''
+            seqs_str = '''  MOT17-04-SDP
+                       '''
+                            #
+
             # data_root = '/home/wangzd/datasets/MOT/MOT17/images/train'
         else:
             seqs_str = '''MOT16-01

@@ -103,7 +103,7 @@ def main():
         # for k in range(2, 7):
         #     compute_centroids(bboxes, k=k, iterations_num=100, metric='aspect')
 
-        for k in range(6, 7):
+        for k in range(3, 4):
             compute_centroids(bboxes, k=k, iterations_num=100, metric='iou')
 
     elif args.cluster == 'dbscan':

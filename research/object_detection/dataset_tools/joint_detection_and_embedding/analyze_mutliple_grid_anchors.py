@@ -32,7 +32,7 @@ def analyze_ssd_anchors(bboxes, scales, aspects, reduce_boxes_in_lowest_layer=Tr
         width, height = scale_to_aspect(scale, aspect)
         anchors.append([0, 0, width, height])
 
-      if interpolated_scale_aspect_ratio > 1.0:
+      if interpolated_scale_aspect_ratio > 0.0:
         interpolated_scale = math.sqrt(scale*scale_next)
         width, height = scale_to_aspect(interpolated_scale, interpolated_scale_aspect_ratio)
         anchors.append([0, 0, width, height])

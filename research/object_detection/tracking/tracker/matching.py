@@ -103,5 +103,8 @@ def fuse_motion(kf, cost_matrix, tracks, detections, only_position=False, lambda
         gating_distance = kf.gating_distance(
             track.mean, track.covariance, measurements, only_position, metric='maha')
         cost_matrix[row, gating_distance > gating_threshold] = np.inf
+        if row == 0:
+            print('gating_distance {}'.format(gating_distance))
+            print('cost_matrix[row] {}'.format(cost_matrix[row]))
         cost_matrix[row] = lambda_ * cost_matrix[row] + (1-lambda_)* gating_distance
     return cost_matrix
