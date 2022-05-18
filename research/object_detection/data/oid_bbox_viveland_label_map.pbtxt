@@ -1,0 +1,30 @@
+item {
+  name: "/m/player_not_raise_hand"
+  id: 1
+  display_name: "player_not_raise_hand"
+}
+item {
+  name: "/m/player_raise_hand"
+  id: 2
+  display_name: "player_raise_hand"
+}
+item {
+  name: "/m/staff_not_raise_hand"
+  id: 3
+  display_name: "staff_not_raise_hand"
+}
+item {
+  name: "/m/staff_raise_hand"
+  id: 4
+  display_name: "staff_raise_hand"
+}
+item {
+  name: "/m/guest_not_raise_hand"
+  id: 5
+  display_name: "guest_not_raise_hand"
+}
+item {
+  name: "/m/guest_raise_hand"
+  id: 6
+  display_name: "guest_raise_hand"
+}

@@ -1,0 +1,10 @@
+item {
+  name: "/m/not_raise_hand"
+  id: 1
+  display_name: "not_raise_hand"
+}
+item {
+  name: "/m/raise_hand"
+  id: 2
+  display_name: "raise_hand"
+}

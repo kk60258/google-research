@@ -1,0 +1,183 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+.hypothesis/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# IPython Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# dotenv
+.env
+
+# virtualenv
+venv/
+ENV/
+
+# Spyder project settings
+.spyderproject
+
+# Rope project settings
+.ropeproject
+
+# PyCharm
+.idea/
+
+# For mac
+.DS_Store
+
+# Training data for word embedding tutorial
+tutorials/embedding/text8
+tutorials/embedding/questions-words.txt
+
+samples/outreach/blogs/segmentation_blogpost/carvana-image-masking-challenge/
+
+
+# pet face test
+images.tar.gz
+images/
+annotations.tar.gz
+annotations/
+pet_faces_train*
+pet_faces_val*
+
+#protobuf
+readme.txt
+bin/
+include/
+protobuf.zip
+object_detection/protos/anchor_generator_pb2.py
+object_detection/protos/argmax_matcher_pb2.py
+object_detection/protos/bipartite_matcher_pb2.py
+object_detection/protos/box_coder_pb2.py
+object_detection/protos/box_predictor_pb2.py
+object_detection/protos/calibration_pb2.py
+object_detection/protos/eval_pb2.py
+object_detection/protos/faster_rcnn_box_coder_pb2.py
+object_detection/protos/faster_rcnn_pb2.py
+object_detection/protos/flexible_grid_anchor_generator_pb2.py
+object_detection/protos/graph_rewriter_pb2.py
+object_detection/protos/grid_anchor_generator_pb2.py
+object_detection/protos/hyperparams_pb2.py
+object_detection/protos/image_resizer_pb2.py
+object_detection/protos/input_reader_pb2.py
+object_detection/protos/keypoint_box_coder_pb2.py
+object_detection/protos/losses_pb2.py
+object_detection/protos/matcher_pb2.py
+object_detection/protos/mean_stddev_box_coder_pb2.py
+object_detection/protos/model_pb2.py
+object_detection/protos/multiscale_anchor_generator_pb2.py
+object_detection/protos/optimizer_pb2.py
+object_detection/protos/pipeline_pb2.py
+object_detection/protos/post_processing_pb2.py
+object_detection/protos/preprocessor_pb2.py
+object_detection/protos/region_similarity_calculator_pb2.py
+object_detection/protos/square_box_coder_pb2.py
+object_detection/protos/ssd_anchor_generator_pb2.py
+object_detection/protos/ssd_pb2.py
+object_detection/protos/string_int_label_map_pb2.py
+object_detection/protos/train_pb2.py
+object_detection/protos/*_pb2.py
+
+
+
+#pretrained ssdmobilenet model
+ssd_mobilenet_v1_coco_2018_01_28/*
+ssd_mobilenet_v1_coco_2018_01_28.tar.gz
+ssd_mobilenet_v2_coco_2018_03_29/*
+ssd_mobilenet_v2_coco_2018_03_29.tar.gz
+ssdlite_mobilenet_v2_coco_2018_05_09/*
+ssdlite_mobilenet_v2_coco_2018_05_09.tar.gz
+
+faster_rcnn*/*
+context_rcnn*/*
+
+#analysis of jpg generated from analyze_anchor.py
+analysis_phone*.jpg
+
+#all *tar.gz
+*tar.gz
+
+#analyze default anchors
+anchor_analyze/
+
+#images to draw bounding box
+BBox-Label-Tool/Images/*
+BBox-Label-Tool/Examples/*
+
+#configs
+object_detection/samples/
+export_command_example.txt
+object_detection/dataset_tools/joint_detection_and_embedding/*.txt
+object_detection/dataset_tools/joint_detection_and_embedding/*.h5
+
+
+
